@@ -13,6 +13,10 @@ or just run from main dir
 
 $ ./eval.sh
 
+or 
+
+$ python3 df-cmr-ros.py
+
 # to test with realsense2_camera
 $ python3 df-cmr-live.py
 
