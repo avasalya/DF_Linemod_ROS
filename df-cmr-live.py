@@ -7,6 +7,7 @@ import copy
 import time
 import getpass
 import argparse
+import math as m
 import numpy as np
 import numpy.ma as ma 
 import pyrealsense2 as rs
@@ -25,7 +26,7 @@ from lib.loss import Loss
 from lib.loss_refiner import Loss_refine
 from lib.knn.__init__ import KNearestNeighbor
 from lib.network import PoseNet, PoseRefineNet
-from lib.transformations import euler_matrix, quaternion_matrix, quaternion_from_matrix
+from lib.transformations import euler_matrix, quaternion_matrix, quaternion_from_matrix, rotation_from_matrix, rotation_matrix, concatenate_matrices
 
 # clean terminal in the beginning
 username = getpass.getuser()
@@ -37,16 +38,17 @@ else:
 
 # specify which gpu to use
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"]="0" # "0,1,2,3"
+os.environ["CUDA_VISIBLE_DEVICES"]="0,1" # "0,1,2,3"
 
 num_objects = 1
-num_points = 1000
+num_points = 500
 
 knn = KNearestNeighbor(1)
 
 path = os.path.dirname(__file__)
 
-pretrained_model = os.path.join(path + '/txonigiri/', 'snapshot_model.npz')
+pretrained_model = os.path.join('txonigiri/', 'snapshot_model.npz')
+# pretrained_model = os.path.join(path + '/txonigiri/', 'snapshot_model.npz')
 pooling_func = cmr.functions.roi_align_2d
 mask_rcnn = cmr.models.MaskRCNNResNet(
             n_layers=50,
@@ -66,13 +68,15 @@ print('maskrcnn model loaded %s' % pretrained_model)
 
 pose = PoseNet(num_points, num_objects)
 pose.cuda()
-pose.load_state_dict(torch.load(path + '/txonigiri/pose_model.pth'))   
+pose.load_state_dict(torch.load('txonigiri/pose_model.pth'))   
+# pose.load_state_dict(torch.load(path + '/txonigiri/pose_model.pth'))   
 pose.eval()
 print("pose_model loaded...")
 
 refiner = PoseRefineNet(num_points, num_objects)
 refiner.cuda()
-refiner.load_state_dict(torch.load(path + '/txonigiri/pose_refine_model.pth'))
+refiner.load_state_dict(torch.load('txonigiri/pose_refine_model.pth'))
+# refiner.load_state_dict(torch.load(path + '/txonigiri/pose_refine_model.pth'))
 refiner.eval()
 print("pose_refine_model loaded...")
 
@@ -159,12 +163,12 @@ class pose_estimation:
         p7 = (int((tar[7][0]/ tar[7][2])*self.cam_fx + self.cam_cx),  int((tar[7][1]/ tar[7][2])*self.cam_fy + self.cam_cy))
         
         r = 255 # int(np.random.choice(range(255)))
-        g = int(np.random.choice(range(255)))
-        b = int(np.random.choice(range(255)))
+        g = 255 # int(np.random.choice(range(255)))
+        b = 255 # int(np.random.choice(range(255)))
 
-        cv2.line(img, p0, p1, (r,g,b), 2)
-        cv2.line(img, p0, p3, (r,g,b), 2)
-        cv2.line(img, p0, p4, (r,g,b), 2)
+        cv2.line(img, p0, p1, (0,0,b), 4)
+        cv2.line(img, p0, p3, (r,0,0), 4)
+        cv2.line(img, p0, p4, (0,g,0), 4)
         cv2.line(img, p1, p2, (r,g,b), 2)
         cv2.line(img, p1, p5, (r,g,b), 2)
         cv2.line(img, p2, p3, (r,g,b), 2)
@@ -200,7 +204,7 @@ class pose_estimation:
             rmax = int(bbox[b,1])
             cmin = int(bbox[b,2])
             cmax = int(bbox[b,3])
-            
+
             img = np.transpose(rgb_original, (0, 1, 2)) #CxHxW
             img_masked = img[:, rmin : rmax, cmin : cmax ]
             choose = mask[rmin : rmax, cmin : cmax].flatten().nonzero()[0]
@@ -225,7 +229,7 @@ class pose_estimation:
             ymap_masked = self.ymap[rmin:rmax, cmin:cmax].flatten()[choose][:, np.newaxis].astype(np.float32)
             choose = np.array([choose])
 
-            cam_scale = 1
+            cam_scale = 0.001
             pt2 = depth_masked/cam_scale
             pt0 = (ymap_masked - self.cam_cx) * pt2 / self.cam_fx
             pt1 = (xmap_masked - self.cam_cy) * pt2 / self.cam_fy
@@ -248,7 +252,7 @@ class pose_estimation:
             how_max, which_max = torch.max(pred_c, 0) #1
             pred_t = pred_t.view(bs * num_points, 1, 3)
 
-            # print("max confidence", how_max)
+            print("max confidence", how_max)
 
             my_r = pred_r[0][which_max[0]].view(-1).cpu().data.numpy()
             my_t = (points.view(bs * num_points, 1, 3) + pred_t)[which_max[0]].view(-1).cpu().data.numpy()
@@ -279,26 +283,44 @@ class pose_estimation:
                 my_pred = np.append(my_r_final, my_t_final)
                 my_r = my_r_final
                 my_t = my_t_final
+            
+            """ visualization """
+            # project point cloud
+            dist = np.array([0.0, 0.0, 0.0, 0.0, 0.0])
+            cam_mat = np.matrix([
+                                [self.cam_fx, 0, self.cam_cx],
+                                [0, self.cam_fy, self.cam_cy],
+                                [0, 0, 1]])
+            
+            imgpts_cloud, jac = cv2.projectPoints(cloud, np.eye(3), np.zeros(shape=my_t.shape), cam_mat, dist)
+            viz = cv2.polylines(np.array(viz), np.int32([np.squeeze(imgpts_cloud)]), True, (0, 225, 105))
+
+            cv2.rectangle(viz, (cmax, cmin), (rmax, rmin), (255,0,0))
+            # xbbox = (cmax-cmin)/480
+            # ybbox = (rmax-rmin)/640
+            # print("cmax-cmin", xbbox)
+            # print("rmax-rmin", ybbox)
 
             # POSITION # ndds has cm units
             my_t = np.array(my_t)
-            # my_t = np.array([my_t[0], my_t[1], 1-my_t[2]])
-            # print('estimated translation is:{0}'.format(my_t))
+            # my_t = np.array([my_t[0]-xbbox, my_t[1]-ybbox, my_t[2]])
+            print("Pos xyz:{0}".format(my_t*0.01))
             
             # ROTATION
             my_r = quaternion_matrix(my_r)[:3, :3]
-            # my_r = np.dot(my_r, np.array([[1, 0, 0], [0, 0, -1], [0, -1, 0]]))
+            
+            Rx = rotation_matrix(m.pi/2, [1, 0, 0])
+            Ry = rotation_matrix(2*m.pi/5, [0, 1, 0])
+            Rz = rotation_matrix(m.pi/2, [0, 0, 1])
+            R = concatenate_matrices(Ry)
+            
+            my_r = np.dot(my_r, R[:3,:3])
             # print('estimated rotation is\n:{0}'.format(my_r))
             
             # Draw estimated pose 3Dbox
             target = np.dot(self.scaled, my_r.T) #my_r.T
             target = np.add(target, my_t)
             self.draw_cube(target, viz)
-
-            # Norm pose
-            NormPos = np.linalg.norm((my_t), ord=1)     
-            # print("NormPos:{0}".format(NormPos))
-            print("Pos xyz:{0}".format(my_t))
 
             # plt.figure(figsize = (10,10)), plt.imshow(viz), plt.show()
             cv2.imshow("pose", cv2.cvtColor(viz, cv2.COLOR_BGR2RGB))
@@ -314,10 +336,10 @@ if __name__ == '__main__':
     bs = 1
     objId = 0
     objlist =[1]
-    iteration = 4
+    iteration = 2
     class_names = ['txonigiri']
 
-    edge = 60.
+    edge = 70.
     scaled = np.array([ [-edge,-edge, edge],
                         [-edge,-edge,-edge],
                         [ edge,-edge,-edge],
@@ -325,12 +347,12 @@ if __name__ == '__main__':
                         [-edge, edge, edge],
                         [-edge, edge,-edge],
                         [ edge, edge,-edge],
-                        [ edge, edge, edge]])/ 1000
+                        [ edge, edge, edge]])
 
     # Stream (Color/Depth) settings
     config = rs.config()
-    config.enable_stream(rs.stream.color, 640 , 480 , rs.format.bgr8, 0)
-    config.enable_stream(rs.stream.depth, 640 , 480 , rs.format.z16, 0)
+    config.enable_stream(rs.stream.color, 640 , 480 , rs.format.bgr8, 60)
+    config.enable_stream(rs.stream.depth, 640 , 480 , rs.format.z16, 60)
 
     # Start streaming
     pipeline = rs.pipeline()
@@ -372,3 +394,27 @@ if __name__ == '__main__':
     finally:
         pipeline.stop()
         cv2.destroyAllWindows()
+
+# %%
+
+# config.enable_stream(rs.stream.pose)
+
+# pose = frames.get_pose_frame()
+# data = pose.get_pose_data()
+# print("position ", data.translation())
+
+# w = data.rotation.w
+# x = -data.rotation.z
+# y = data.rotation.x
+# z = -data.rotation.y
+
+# pitch =  -m.asin(2.0 * (x*z - w*y)) * 180.0 / m.pi;
+# roll  =  m.atan2(2.0 * (w*x + y*z), w*w - x*x - y*y + z*z) * 180.0 / m.pi;
+# yaw   =  m.atan2(2.0 * (w*z + x*y), w*w + x*x - y*y - z*z) * 180.0 / m.pi;
+
+# print("Frame #{}".format(pose.frame_number))
+# print("RPY [deg]: Roll: {0:.7f}, Pitch: {1:.7f}, Yaw: {2:.7f}".format(roll, pitch, yaw))
+
+# depth_sensor = profile.get_device().first_depth_sensor()
+# depth_scale = depth_sensor.get_depth_scale()
+# print("depth scale", depth_scale)
