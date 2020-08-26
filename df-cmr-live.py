@@ -134,9 +134,9 @@ class pose_estimation:
         g = 255 # int(np.random.choice(range(255)))
         b = 255 # int(np.random.choice(range(255)))
 
-        cv2.line(img, p0, p1, color, 4)
-        cv2.line(img, p0, p3, color, 4)
-        cv2.line(img, p0, p4, color, 4)
+        cv2.line(img, p0, p1, (0,0,b), 4)
+        cv2.line(img, p0, p3, (r,0,0), 4)
+        cv2.line(img, p0, p4, (0,g,0), 4)
         cv2.line(img, p1, p2, color, 2)
         cv2.line(img, p1, p5, color, 2)
         cv2.line(img, p2, p3, color, 2)
@@ -151,7 +151,6 @@ class pose_estimation:
         # cv2.rectangle(img, p0, p7, (0,0,255))
 
         return p0, p7
-
 
     def pose(self):
         
@@ -298,26 +297,19 @@ class pose_estimation:
             # my_r = np.dot(my_r, R[:3,:3])
             # print('estimated rotation is\n:{0}'.format(my_r))
             
-            # # # transform 3D box with estimated pose and Draw
-            # target = np.dot(self.scaled, my_r.T)
-            # target = np.add(target, my_t)
-            # _,_ = self.draw_cube(target, viz, (255, 255, 255))
+            # transform 3D box with estimated pose and Draw
+            target = np.dot(self.scaled, my_r.T)
+            target = np.add(target, my_t)
+            _,_ = self.draw_cube(target, viz, (255, 255, 255))
 
+#TODO: get camera world frame pose
             # add 3D box with estimated position and Draw
-            target = np.add(self.scaled, my_t)
+            target = np.dot(self.scaled, np.identity(3))
+            target = np.add(target, my_t)
             p0, p7 = self.draw_cube(target, viz, (255, 165, 0))
+            
+            # align 2d bbox with 2D box face
             # cv2.rectangle(viz, p0, p7, (0,0,255))
-            
-            # print(np.array(p0)- np.array(p7))
-            # X = (rmax, rmin)
-            # Y = (cmax, cmin)
-            # print(X, Y)
-            # print(p0, p7)
-            # newP0 = (p0[0] + p0[0]-X[0], p0[1] + p0[1]-X[1])
-            # newP7 = (p7[0] + p7[0]-Y[0], p7[1] + p7[1]-Y[1])
-            # print(newP0, newP7)
-            # cv2.rectangle(viz, newP0, newP7, (0,0,255))
-            
 
             # plt.figure(figsize = (10,10)), plt.imshow(viz), plt.show()
             cv2.imshow("pose", cv2.cvtColor(viz, cv2.COLOR_BGR2RGB))
@@ -327,11 +319,9 @@ class pose_estimation:
 
 if __name__ == '__main__':
     
-    autostop = 10
+    autostop = 100
     num_objects = 1
     num_points = 500
-
-    # knn = KNearestNeighbor(1)
 
     path = os.path.dirname(__file__)
 
@@ -421,6 +411,7 @@ if __name__ == '__main__':
             # depth_frame = rs.colorizer().colorize(depth_frame)
             depth = np.asanyarray(depth_frame.get_data())
 
+#TODO: get camera world frame pose
             print(rs.pose.rotation)
             
             # get intrinsics
@@ -442,8 +433,6 @@ if __name__ == '__main__':
             # depth = depth * depth_scale
             # dist,_,_,_ = cv2.mean(depth)
             # print("depth of object", dist)
-
-
 
             # DF pose estimation
             pe = pose_estimation(mask_rcnn, pose, refiner, objId, scaled, rgb, depth) 
