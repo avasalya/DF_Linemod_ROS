@@ -10,8 +10,10 @@ import argparse
 import math as m
 import numpy as np
 import numpy.ma as ma 
-import pyrealsense2 as rs
 import matplotlib.pyplot as plt
+
+import pyrealsense2 as rs
+# from pyntcloud import PyntCloud 
 
 import chainer
 import chainer.utils as utils
@@ -26,7 +28,7 @@ from lib.loss import Loss
 from lib.loss_refiner import Loss_refine
 from lib.knn.__init__ import KNearestNeighbor
 from lib.network import PoseNet, PoseRefineNet
-from lib.transformations import euler_matrix, quaternion_matrix, quaternion_from_matrix, rotation_from_matrix, rotation_matrix, concatenate_matrices
+from lib.transformations import quaternion_matrix, quaternion_from_matrix, rotation_matrix, concatenate_matrices, is_same_transform, is_same_quaternion
 
 # clean terminal in the beginning
 username = getpass.getuser()
@@ -39,46 +41,6 @@ else:
 # specify which gpu to use
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
 os.environ["CUDA_VISIBLE_DEVICES"]="0,1" # "0,1,2,3"
-
-num_objects = 1
-num_points = 500
-
-knn = KNearestNeighbor(1)
-
-path = os.path.dirname(__file__)
-
-pretrained_model = os.path.join('txonigiri/', 'snapshot_model.npz')
-# pretrained_model = os.path.join(path + '/txonigiri/', 'snapshot_model.npz')
-pooling_func = cmr.functions.roi_align_2d
-mask_rcnn = cmr.models.MaskRCNNResNet(
-            n_layers=50,
-            n_fg_class=1,
-            pretrained_model= pretrained_model,
-            pooling_func=pooling_func,
-            anchor_scales=[4, 8, 16, 32],
-            mean=(123.152, 115.903, 103.063),
-            roi_size= 7, #7,14
-            min_size=600,
-            max_size=1000,
-        )
-
-chainer.cuda.get_device_from_id(0).use()
-mask_rcnn.to_gpu()
-print('maskrcnn model loaded %s' % pretrained_model)
-
-pose = PoseNet(num_points, num_objects)
-pose.cuda()
-pose.load_state_dict(torch.load('txonigiri/pose_model.pth'))   
-# pose.load_state_dict(torch.load(path + '/txonigiri/pose_model.pth'))   
-pose.eval()
-print("pose_model loaded...")
-
-refiner = PoseRefineNet(num_points, num_objects)
-refiner.cuda()
-refiner.load_state_dict(torch.load('txonigiri/pose_refine_model.pth'))
-# refiner.load_state_dict(torch.load(path + '/txonigiri/pose_refine_model.pth'))
-refiner.eval()
-print("pose_refine_model loaded...")
 
 #%%
 
@@ -105,16 +67,22 @@ class pose_estimation:
         self.scaled = scaled_
 
         # cam @ aist
-        self.cam_fx = 605.2861938476562
-        self.cam_cx = 320.0749206542969
-        self.cam_fy = 605.69921875
-        self.cam_cy = 247.87693786621094
+        self.cam_fx = 605.286
+        self.cam_cx = 320.075
+        self.cam_fy = 605.699
+        self.cam_cy = 247.877
+
+        # cam depth @ aist
+        # self.cam_cx = 160.037
+        # self.cam_cy = 123.938
+        # self.cam_fx = 302.643
+        # self.cam_fy = 302.85
 
         # cam @ tx
-        # self.cam_fx = 611.5845947265625
-        # self.cam_cx = 324.00238037109375
-        # self.cam_fy = 611.8369750976562
-        # self.cam_cy = 235.85594177246094
+        # self.cam_fx = 611.586
+        # self.cam_cx = 324.002
+        # self.cam_fy = 611.837
+        # self.cam_cy = 235.856
 
         self.xmap = np.array([[j for i in range(640)] for j in range(480)]) 
         self.ymap = np.array([[i for i in range(640)] for j in range(480)])
@@ -151,7 +119,7 @@ class pose_estimation:
 
         return (mask, bbox, viz)
 
-    def draw_cube(self, tar, img):
+    def draw_cube(self, tar, img, color):
 
         p0 = (int((tar[0][0]/ tar[0][2])*self.cam_fx + self.cam_cx),  int((tar[0][1]/ tar[0][2])*self.cam_fy + self.cam_cy))
         p1 = (int((tar[1][0]/ tar[1][2])*self.cam_fx + self.cam_cx),  int((tar[1][1]/ tar[1][2])*self.cam_fy + self.cam_cy))
@@ -166,18 +134,24 @@ class pose_estimation:
         g = 255 # int(np.random.choice(range(255)))
         b = 255 # int(np.random.choice(range(255)))
 
-        cv2.line(img, p0, p1, (0,0,b), 4)
-        cv2.line(img, p0, p3, (r,0,0), 4)
-        cv2.line(img, p0, p4, (0,g,0), 4)
-        cv2.line(img, p1, p2, (r,g,b), 2)
-        cv2.line(img, p1, p5, (r,g,b), 2)
-        cv2.line(img, p2, p3, (r,g,b), 2)
-        cv2.line(img, p2, p6, (r,g,b), 2)
-        cv2.line(img, p3, p7, (r,g,b), 2)
-        cv2.line(img, p4, p5, (r,g,b), 2)
-        cv2.line(img, p4, p7, (r,g,b), 2)
-        cv2.line(img, p5, p6, (r,g,b), 2)
-        cv2.line(img, p6, p7, (r,g,b), 2)
+        cv2.line(img, p0, p1, color, 4)
+        cv2.line(img, p0, p3, color, 4)
+        cv2.line(img, p0, p4, color, 4)
+        cv2.line(img, p1, p2, color, 2)
+        cv2.line(img, p1, p5, color, 2)
+        cv2.line(img, p2, p3, color, 2)
+        cv2.line(img, p2, p6, color, 2)
+        cv2.line(img, p3, p7, color, 2)
+        cv2.line(img, p4, p5, color, 2)
+        cv2.line(img, p4, p7, color, 2)
+        cv2.line(img, p5, p6, color, 2)
+        cv2.line(img, p6, p7, color, 2)
+
+        # print(p0, p1, p2, p3, p4, p5, p6, p7)
+        # cv2.rectangle(img, p0, p7, (0,0,255))
+
+        return p0, p7
+
 
     def pose(self):
         
@@ -229,7 +203,7 @@ class pose_estimation:
             ymap_masked = self.ymap[rmin:rmax, cmin:cmax].flatten()[choose][:, np.newaxis].astype(np.float32)
             choose = np.array([choose])
 
-            cam_scale = 0.001
+            cam_scale = mm2m
             pt2 = depth_masked/cam_scale
             pt0 = (ymap_masked - self.cam_cx) * pt2 / self.cam_fx
             pt1 = (xmap_masked - self.cam_cy) * pt2 / self.cam_fy
@@ -249,10 +223,10 @@ class pose_estimation:
             pred_r, pred_t, pred_c, emb = self.estimator(img_, points, choose, idx)
             pred_r = pred_r / torch.norm(pred_r, dim=2).view(1, num_points, 1)
             pred_c = pred_c.view(bs, num_points)
-            how_max, which_max = torch.max(pred_c, 0) #1
+            how_max, which_max = torch.max(pred_c, 1) #1
             pred_t = pred_t.view(bs * num_points, 1, 3)
 
-            print("max confidence", how_max)
+            # print("max confidence", how_max)
 
             my_r = pred_r[0][which_max[0]].view(-1).cpu().data.numpy()
             my_t = (points.view(bs * num_points, 1, 3) + pred_t)[which_max[0]].view(-1).cpu().data.numpy()
@@ -283,8 +257,9 @@ class pose_estimation:
                 my_pred = np.append(my_r_final, my_t_final)
                 my_r = my_r_final
                 my_t = my_t_final
-            
+
             """ visualization """
+
             # project point cloud
             dist = np.array([0.0, 0.0, 0.0, 0.0, 0.0])
             cam_mat = np.matrix([
@@ -295,32 +270,54 @@ class pose_estimation:
             imgpts_cloud, jac = cv2.projectPoints(cloud, np.eye(3), np.zeros(shape=my_t.shape), cam_mat, dist)
             viz = cv2.polylines(np.array(viz), np.int32([np.squeeze(imgpts_cloud)]), True, (0, 225, 105))
 
+            # draw 2D box
             cv2.rectangle(viz, (cmax, cmin), (rmax, rmin), (255,0,0))
-            # xbbox = (cmax-cmin)/480
-            # ybbox = (rmax-rmin)/640
-            # print("cmax-cmin", xbbox)
-            # print("rmax-rmin", ybbox)
+            
+            # position mm to m
+            my_t = np.array(my_t*mm2m)
+            print("Pos xyz:{0}".format(my_t))
 
-            # POSITION # ndds has cm units
-            my_t = np.array(my_t)
-            # my_t = np.array([my_t[0]-xbbox, my_t[1]-ybbox, my_t[2]])
-            print("Pos xyz:{0}".format(my_t*0.01))
+            # rotation
+            my_r_quat = my_r
+            x = -my_r_quat[0]
+            y =  my_r_quat[1]
+            z = -my_r_quat[2]
+            w =  my_r_quat[3]
+
+            roll  =  m.atan2(2.0 * (w*x + y*z), w*w - x*x - y*y + z*z) * 180.0 / m.pi;
+            pitch =  -m.asin(2.0 * (x*z - w*y)) * 180.0 / m.pi;
+            yaw   =  m.atan2(2.0 * (w*z + x*y), w*w + x*x - y*y - z*z) * 180.0 / m.pi;
+            # print("RPY [deg]: Roll: {0:.7f}, Pitch: {1:.7f}, Yaw: {2:.7f}".format(roll, pitch, yaw))
             
-            # ROTATION
+            Rx = rotation_matrix(roll, [1, 0, 0])
+            Ry = rotation_matrix(pitch, [0, 1, 0])
+            Rz = rotation_matrix(yaw, [0, 0, 1])
+            R = concatenate_matrices(Rx, Ry, Rz)
+                        
             my_r = quaternion_matrix(my_r)[:3, :3]
-            
-            Rx = rotation_matrix(m.pi/2, [1, 0, 0])
-            Ry = rotation_matrix(2*m.pi/5, [0, 1, 0])
-            Rz = rotation_matrix(m.pi/2, [0, 0, 1])
-            R = concatenate_matrices(Ry)
-            
-            my_r = np.dot(my_r, R[:3,:3])
+            # my_r = np.dot(my_r, R[:3,:3])
             # print('estimated rotation is\n:{0}'.format(my_r))
             
-            # Draw estimated pose 3Dbox
-            target = np.dot(self.scaled, my_r.T) #my_r.T
-            target = np.add(target, my_t)
-            self.draw_cube(target, viz)
+            # # # transform 3D box with estimated pose and Draw
+            # target = np.dot(self.scaled, my_r.T)
+            # target = np.add(target, my_t)
+            # _,_ = self.draw_cube(target, viz, (255, 255, 255))
+
+            # add 3D box with estimated position and Draw
+            target = np.add(self.scaled, my_t)
+            p0, p7 = self.draw_cube(target, viz, (255, 165, 0))
+            # cv2.rectangle(viz, p0, p7, (0,0,255))
+            
+            # print(np.array(p0)- np.array(p7))
+            # X = (rmax, rmin)
+            # Y = (cmax, cmin)
+            # print(X, Y)
+            # print(p0, p7)
+            # newP0 = (p0[0] + p0[0]-X[0], p0[1] + p0[1]-X[1])
+            # newP7 = (p7[0] + p7[0]-Y[0], p7[1] + p7[1]-Y[1])
+            # print(newP0, newP7)
+            # cv2.rectangle(viz, newP0, newP7, (0,0,255))
+            
 
             # plt.figure(figsize = (10,10)), plt.imshow(viz), plt.show()
             cv2.imshow("pose", cv2.cvtColor(viz, cv2.COLOR_BGR2RGB))
@@ -329,13 +326,55 @@ class pose_estimation:
 
 
 if __name__ == '__main__':
-        
+    
+    autostop = 10
+    num_objects = 1
+    num_points = 500
+
+    # knn = KNearestNeighbor(1)
+
+    path = os.path.dirname(__file__)
+
+    pretrained_model = os.path.join('txonigiri/', 'snapshot_model.npz')
+    # pretrained_model = os.path.join(path + '/txonigiri/', 'snapshot_model.npz')
+    pooling_func = cmr.functions.roi_align_2d
+    mask_rcnn = cmr.models.MaskRCNNResNet(
+                n_layers=50,
+                n_fg_class=1,
+                pretrained_model= pretrained_model,
+                pooling_func=pooling_func,
+                anchor_scales=[4, 8, 16, 32],
+                mean=(123.152, 115.903, 103.063),
+                roi_size= 7, #7,14
+                min_size=600,
+                max_size=1000,
+            )
+
+    chainer.cuda.get_device_from_id(0).use()
+    mask_rcnn.to_gpu()
+    print('maskrcnn model loaded %s' % pretrained_model)
+
+    pose = PoseNet(num_points, num_objects)
+    pose.cuda()
+    pose.load_state_dict(torch.load('txonigiri/pose_model.pth'))   
+    # pose.load_state_dict(torch.load(path + '/txonigiri/pose_model.pth'))   
+    pose.eval()
+    print("pose_model loaded...")
+
+    refiner = PoseRefineNet(num_points, num_objects)
+    refiner.cuda()
+    refiner.load_state_dict(torch.load('txonigiri/pose_refine_model.pth'))
+    # refiner.load_state_dict(torch.load(path + '/txonigiri/pose_refine_model.pth'))
+    refiner.eval()
+    print("pose_refine_model loaded...")
+
     DEBUG = False
     IMGSAVE = False
 
     bs = 1
     objId = 0
     objlist =[1]
+    mm2m = 0.001
     iteration = 2
     class_names = ['txonigiri']
 
@@ -348,6 +387,7 @@ if __name__ == '__main__':
                         [-edge, edge,-edge],
                         [ edge, edge,-edge],
                         [ edge, edge, edge]])
+    scaled = scaled * mm2m
 
     # Stream (Color/Depth) settings
     config = rs.config()
@@ -357,6 +397,8 @@ if __name__ == '__main__':
     # Start streaming
     pipeline = rs.pipeline()
     profile = pipeline.start(config)
+
+    t0 = time.time()
 
     try:
         while True:
@@ -370,7 +412,7 @@ if __name__ == '__main__':
 
             if  not depth_frame or  not color_frame:
                 raise ValueError('No image found, camera not streaming?')
-                
+
             # color image
             rgb = np.asanyarray(color_frame.get_data())
             rgb = cv2.cvtColor(rgb, cv2.COLOR_BGR2RGB)
@@ -378,6 +420,30 @@ if __name__ == '__main__':
             # Depth image
             # depth_frame = rs.colorizer().colorize(depth_frame)
             depth = np.asanyarray(depth_frame.get_data())
+
+            print(rs.pose.rotation)
+            
+            # get intrinsics
+            # d = rs.decimation_filter()
+            # processed = d.process(color_frame)
+            # prof = processed.get_profile()
+            # video_prof = prof.as_video_stream_profile()
+            # intr = video_prof.get_intrinsics()
+            # print(intr)
+
+            # get depth of a pixel
+            # pixel_distance_in_meters = depth_frame.get_distance(247,191)
+            # print(pixel_distance_in_meters)
+
+            #get mean depth within a box
+            # depth = depth[xmin_depth:xmax_depth,ymin_depth:ymax_depth].astype(float)
+            # depth_sensor = profile.get_device().first_depth_sensor()
+            # depth_scale = depth_sensor.get_depth_scale()
+            # depth = depth * depth_scale
+            # dist,_,_,_ = cv2.mean(depth)
+            # print("depth of object", dist)
+
+
 
             # DF pose estimation
             pe = pose_estimation(mask_rcnn, pose, refiner, objId, scaled, rgb, depth) 
@@ -390,31 +456,10 @@ if __name__ == '__main__':
             if  key == 27:
                 print("stopping streaming...")
                 break
-
+            
+            if t2-t0 > autostop:
+                print("auto stop streaming after {} seconds".format(int(autostop)))
+                break
     finally:
         pipeline.stop()
         cv2.destroyAllWindows()
-
-# %%
-
-# config.enable_stream(rs.stream.pose)
-
-# pose = frames.get_pose_frame()
-# data = pose.get_pose_data()
-# print("position ", data.translation())
-
-# w = data.rotation.w
-# x = -data.rotation.z
-# y = data.rotation.x
-# z = -data.rotation.y
-
-# pitch =  -m.asin(2.0 * (x*z - w*y)) * 180.0 / m.pi;
-# roll  =  m.atan2(2.0 * (w*x + y*z), w*w - x*x - y*y + z*z) * 180.0 / m.pi;
-# yaw   =  m.atan2(2.0 * (w*z + x*y), w*w + x*x - y*y - z*z) * 180.0 / m.pi;
-
-# print("Frame #{}".format(pose.frame_number))
-# print("RPY [deg]: Roll: {0:.7f}, Pitch: {1:.7f}, Yaw: {2:.7f}".format(roll, pitch, yaw))
-
-# depth_sensor = profile.get_device().first_depth_sensor()
-# depth_scale = depth_sensor.get_depth_scale()
-# print("depth scale", depth_scale)
