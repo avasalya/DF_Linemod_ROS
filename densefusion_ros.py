@@ -251,7 +251,7 @@ class pose_estimation:
             ymap_masked = self.ymap[rmin:rmax, cmin:cmax].flatten()[choose][:, np.newaxis].astype(np.float32)
             choose = np.array([choose])
 
-            cam_scale = 1
+            cam_scale = mm2m
             pt2 = depth_masked/cam_scale
             pt0 = (ymap_masked - self.cam_cx) * pt2 / self.cam_fx
             pt1 = (xmap_masked - self.cam_cy) * pt2 / self.cam_fy
@@ -307,7 +307,7 @@ class pose_estimation:
                 my_t = my_t_final
 
             # POSITION # ndds has cm units
-            my_t = np.array(my_t)
+            my_t = np.array(my_t*mm2m)
             # my_t = np.array([my_t[0], my_t[1], 1-my_t[2]])
             # print('estimated translation is:{0}'.format(my_t))
             
@@ -341,10 +341,11 @@ if __name__ == '__main__':
     bs = 1
     objId = 0
     objlist =[1]
-    iteration = 4
+    mm2m = 0.001
+    iteration = 2
     class_names = ['txonigiri']
 
-    edge = 60.
+    edge = 70.
     scaled = np.array([ [-edge,-edge, edge],
                         [-edge,-edge,-edge],
                         [ edge,-edge,-edge],
@@ -352,7 +353,8 @@ if __name__ == '__main__':
                         [-edge, edge, edge],
                         [-edge, edge,-edge],
                         [ edge, edge,-edge],
-                        [ edge, edge, edge]])/ 1000
+                        [ edge, edge, edge]])
+    scaled = scaled * mm2m
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--model', type=str, default='txonigiri', help='object name --> txonigiri')
