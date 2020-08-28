@@ -141,7 +141,7 @@ class pose_estimation:
         my_result = []
         
         mask, bbox, viz = self.draw_seg(self.batch_predict())
-        # cv2.imshow("mask", cv2.cvtColor(viz, cv2.COLOR_BGR2RGB)), cv2.moveWindow('mask', 0, 500) 
+        cv2.imshow("mask", cv2.cvtColor(viz, cv2.COLOR_BGR2RGB)), cv2.moveWindow('mask', 0, 500) 
         
         pred = mask
         pred = pred *255
@@ -247,11 +247,13 @@ class pose_estimation:
             """ get mean depth within a box as depth offset """
             depth = self.depth[rmin : rmax, cmin : cmax].astype(float)
             depth = depth * mm2m
-            dist,_,_,_ = cv2.mean(depth)
+            dep,_,_,_ = cv2.mean(depth)
             
             """ position mm2m """
             my_t = np.array(my_t*mm2m)
-            my_t[2] = dist
+            my_t[2] = dep
+            my_t[1] = my_t[1] + 0.05
+            
             print("Pos xyz:{0}".format(my_t))
 
             """ rotation """
@@ -281,13 +283,13 @@ class pose_estimation:
             get_i[0:3, 0:3] = mat_r
             get_i[-1,:-1] = my_t
             angle, dirc, pt = rotation_from_matrix(get_i) 
-            # print(angle, dirc, pt)
             R = rotation_matrix(angle, dirc, pt)
             # print("rotation mat\n", R)
             # R = rotation_matrix(-2.623, [-0.969, 0.0336, -0.246], [0, 0, 0, 1])
+            # Rx = rotation_matrix(2*m.pi/3, [1, -1, 0], my_t)
+            # R = concatenate_matrices(Ry, Rx)[:3,:3]
             
             """ transform 3D box and axis with estimated pose and Draw """
-            
             mat_r = np.dot(mat_r.T, R[:3, :3])
             target_df = np.dot(edges, mat_r)
             target_df = np.add(target_df, my_t)            
@@ -335,13 +337,11 @@ def cv2pil(image):
 """ adapted from DOPE """
 def DrawLine(g_draw, point1, point2, lineColor, lineWidth):
     '''Draws line on image'''
-    # global g_draw
     if not point1 is None and point2 is not None:
         g_draw.line([point1, point2], fill=lineColor, width=lineWidth)
 
 def DrawDot(g_draw, point, pointColor, pointRadius):
     '''Draws dot (filled circle) on image'''
-    # global g_draw
     if point is not None:
         xy = [
             point[0] - pointRadius,
@@ -470,15 +470,8 @@ if __name__ == '__main__':
     cam_mat = np.matrix([ [cam_fx, 0, cam_cx], [0, cam_fy, cam_cy], [0, 0, 1] ])
 
     edge = 50.
-    # edges = np.array([ [-edge,-edge, edge], # 1
-    #                    [-edge,-edge,-edge], # 2
-    #                    [ edge,-edge,-edge], # 3
-    #                    [ edge,-edge, edge], # 4
-    #                    [-edge, edge, edge], # 5
-    #                    [-edge, edge,-edge], # 6
-    #                    [ edge, edge,-edge], # 7
-    #                    [ edge, edge, edge], # 8
-    #                 ])
+    edge = edge * mm2m
+
     edges  = np.array([
                     [edge, -edge,  edge],
                     [edge, -edge, -edge],
@@ -488,7 +481,17 @@ if __name__ == '__main__':
                     [-edge,-edge, -edge],
                     [-edge, edge, -edge],
                     [-edge, edge,  edge]])
-    edges = edges * mm2m
+    
+    # edges = np.array([ [-edge,-edge, edge], # 1
+    #                    [-edge,-edge,-edge], # 2
+    #                    [ edge,-edge,-edge], # 3
+    #                    [ edge,-edge, edge], # 4
+    #                    [-edge, edge, edge], # 5
+    #                    [-edge, edge,-edge], # 6
+    #                    [ edge, edge,-edge], # 7
+    #                    [ edge, edge, edge], # 8
+    #                 ])
+    
 
     # Stream (Color/Depth) settings
     config = rs.config()
@@ -541,9 +544,3 @@ if __name__ == '__main__':
         cv2.destroyAllWindows()
 
 # %%
-
-# Rx = rotation_matrix(2*m.pi/3, [1, -1, 0], my_t)
-# Ry = rotation_matrix(m.pi/6, [0, 1, 0], my_t)
-# Rz = rotation_matrix(m.pi/9, [0, 0, 1], my_t)
-# R = concatenate_matrices(Ry, Rx)[:3,:3]
-# mat_r = np.dot(mat_r, R[:3, :3])
