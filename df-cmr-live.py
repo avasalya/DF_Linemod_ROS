@@ -12,6 +12,9 @@ import numpy as np
 import numpy.ma as ma 
 import matplotlib.pyplot as plt
 
+from PIL import Image
+from PIL import ImageDraw
+
 import pyrealsense2 as rs
 
 import chainer
@@ -147,6 +150,16 @@ class pose_estimation:
         p6 = (int((tar[6][0]/ tar[6][2])*cam_fx + cam_cx),  int((tar[6][1]/ tar[6][2])*cam_fy + cam_cy))
         p7 = (int((tar[7][0]/ tar[7][2])*cam_fx + cam_cx),  int((tar[7][1]/ tar[7][2])*cam_fy + cam_cy))
         
+        points = []
+        points.append(tuple(p0))
+        points.append(tuple(p1))
+        points.append(tuple(p2))
+        points.append(tuple(p3))
+        points.append(tuple(p4))
+        points.append(tuple(p5))
+        points.append(tuple(p6))
+        points.append(tuple(p7))
+
         r = 255 # int(np.random.choice(range(255)))
         g = 255 # int(np.random.choice(range(255)))
         b = 255 # int(np.random.choice(range(255)))
@@ -154,23 +167,24 @@ class pose_estimation:
         # cv2.line(img, p0, p1, (0,0,b), 2)
         # cv2.line(img, p0, p3, (r,0,0), 2)
         # cv2.line(img, p0, p4, (0,g,0), 2)
-        cv2.line(img, p0, p1, color, 2)
-        cv2.line(img, p0, p3, color, 2)
-        cv2.line(img, p0, p4, color, 2)
-        cv2.line(img, p1, p2, color, 2)
-        cv2.line(img, p1, p5, color, 2)
-        cv2.line(img, p2, p3, color, 2)
-        cv2.line(img, p2, p6, color, 2)
-        cv2.line(img, p3, p7, color, 2)
-        cv2.line(img, p4, p5, color, 2)
-        cv2.line(img, p4, p7, color, 2)
-        cv2.line(img, p5, p6, color, 2)
-        cv2.line(img, p6, p7, color, 2)
+        
+        # cv2.line(img, p0, p1, color, 2)
+        # cv2.line(img, p0, p3, color, 2)
+        # cv2.line(img, p0, p4, color, 2)
+        # cv2.line(img, p1, p2, color, 2)
+        # cv2.line(img, p1, p5, color, 2)
+        # cv2.line(img, p2, p3, color, 2)
+        # cv2.line(img, p2, p6, color, 2)
+        # cv2.line(img, p3, p7, color, 2)
+        # cv2.line(img, p4, p5, color, 2)
+        # cv2.line(img, p4, p7, color, 2)
+        # cv2.line(img, p5, p6, color, 2)
+        # cv2.line(img, p6, p7, color, 2)
 
         # print(p0, p1, p2, p3, p4, p5, p6, p7)
         # cv2.rectangle(img, p0, p7, (0,0,255))
 
-        return p0, p7
+        return p0, p7, points
 
     def draw_axis(self, img, R, t, K):
         # How+to+draw+3D+Coordinate+Axes+with+OpenCV+for+face+pose+estimation%3f
@@ -315,9 +329,7 @@ class pose_estimation:
             # print('estimated rotation is\n:{0}'.format(mat_r))
 
             """ project point cloud """
-            # imgpts_cloud,_ = cv2.projectPoints(points.cpu().numpy(), np.eye(3), np.zeros(shape=my_t.shape), cam_mat, dist)
             imgpts_cloud,_ = cv2.projectPoints(np.dot(points.cpu().numpy(), mat_r), mat_r, my_t, cam_mat, dist)
-            # viz = cv2.polylines(np.array(viz), np.int32([np.squeeze(imgpts_cloud)]), True, (0, 225, 105))
             viz = self.draw_cloudPts(viz, imgpts_cloud, 1)
 
             """ draw cmr 2D box """
@@ -353,14 +365,96 @@ class pose_estimation:
             # mat_r = mat_r.T
             target_df = np.dot(edges, mat_r)
             target_df = np.add(target_df, my_t)
-            _,_ = self.draw_cube(target_df, viz, (255, 255, 255))
+            _,_, points = self.draw_cube(target_df, viz, (255, 255, 255))
             self.draw_axis(viz, mat_r, my_t, cam_mat)
 
+
+            """ DOPE cuboid """
+            new_image = cv2pil(viz)
+            g_draw = ImageDraw.Draw(new_image)
+            DrawCube(g_draw, points, (255, 101, 0))
+            viz = pil2cv(new_image)
+            # cv2.imshow("newcube", viz)
+            
+            """ viz pred pose  """
             cv2.imshow("pose", cv2.cvtColor(viz, cv2.COLOR_BGR2RGB))
             cv2.moveWindow('pose', 0, 0)
             
         return viz
 
+
+""" https://qiita.com/derodero24/items/f22c22b22451609908ee """
+def pil2cv(image):
+    new_image = np.array(image, dtype=np.uint8)
+    if new_image.ndim == 2:  # モノクロ
+        pass
+    elif new_image.shape[2] == 3:  # カラー
+        new_image = cv2.cvtColor(new_image, cv2.COLOR_BGR2RGB)
+    elif new_image.shape[2] == 4:  # 透過
+        new_image = cv2.cvtColor(new_image, cv2.COLOR_RGBA2BGRA)
+    return new_image
+
+def cv2pil(image):
+    new_image = image.copy()
+    new_image = cv2.cvtColor(new_image, cv2.COLOR_BGR2RGB)
+    new_image = Image.fromarray(new_image)
+    return new_image
+
+""" adapted from DOPE """
+def DrawLine(g_draw, point1, point2, lineColor, lineWidth):
+    '''Draws line on image'''
+    # global g_draw
+    if not point1 is None and point2 is not None:
+        g_draw.line([point1, point2], fill=lineColor, width=lineWidth)
+
+def DrawDot(g_draw, point, pointColor, pointRadius):
+    '''Draws dot (filled circle) on image'''
+    # global g_draw
+    if point is not None:
+        xy = [
+            point[0] - pointRadius,
+            point[1] - pointRadius,
+            point[0] + pointRadius,
+            point[1] + pointRadius
+        ]
+        g_draw.ellipse(xy,
+                       fill=pointColor,
+                       outline=pointColor
+                       )
+
+def DrawCube(g_draw, points, color=(255, 0, 0)):
+    '''
+    Draws cube with a thick solid line across
+    the front top edge and an X on the top face.
+    '''
+
+    lineWidthForDrawing = 2
+
+    # draw front
+    DrawLine(g_draw, points[0], points[1], color, lineWidthForDrawing)
+    DrawLine(g_draw, points[1], points[2], color, lineWidthForDrawing)
+    DrawLine(g_draw, points[3], points[2], color, lineWidthForDrawing)
+    DrawLine(g_draw, points[3], points[0], color, lineWidthForDrawing)
+
+    # draw back
+    DrawLine(g_draw, points[4], points[5], color, lineWidthForDrawing)
+    DrawLine(g_draw, points[6], points[5], color, lineWidthForDrawing)
+    DrawLine(g_draw, points[6], points[7], color, lineWidthForDrawing)
+    DrawLine(g_draw, points[4], points[7], color, lineWidthForDrawing)
+
+    # draw sides
+    DrawLine(g_draw, points[0], points[4], color, lineWidthForDrawing)
+    DrawLine(g_draw, points[7], points[3], color, lineWidthForDrawing)
+    DrawLine(g_draw, points[5], points[1], color, lineWidthForDrawing)
+    DrawLine(g_draw, points[2], points[6], color, lineWidthForDrawing)
+
+    # draw dots
+    DrawDot(g_draw, points[0], pointColor=color, pointRadius=4)
+    DrawDot(g_draw, points[1], pointColor=color, pointRadius=4)
+
+    # draw x on the top
+    DrawLine(g_draw, points[0], points[5], color, lineWidthForDrawing)
+    DrawLine(g_draw, points[1], points[4], color, lineWidthForDrawing)
 
 if __name__ == '__main__':
     
@@ -403,7 +497,7 @@ if __name__ == '__main__':
     #                    [-edge, edge,-edge], # 6
     #                    [ edge, edge,-edge], # 7
     #                    [ edge, edge, edge], # 8
-    #                 ])    
+    #                 ])
     edges  = np.array([
                     [edge, -edge,  edge],
                     [edge, -edge, -edge],
