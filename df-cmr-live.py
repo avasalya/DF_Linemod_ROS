@@ -141,7 +141,7 @@ class pose_estimation:
         my_result = []
         
         mask, bbox, viz = self.draw_seg(self.batch_predict())
-        cv2.imshow("mask", cv2.cvtColor(viz, cv2.COLOR_BGR2RGB)), cv2.moveWindow('mask', 0, 500) 
+        # cv2.imshow("mask", cv2.cvtColor(viz, cv2.COLOR_BGR2RGB)), cv2.moveWindow('mask', 0, 500) 
         
         pred = mask
         pred = pred *255
@@ -523,6 +523,15 @@ if __name__ == '__main__':
 
             # Depth image
             depth = np.asanyarray(depth_frame.get_data())
+
+            # merge depth with rgb
+            gray_color = 153
+            clipping_distance = 1 / mm2m # in mm
+            depth_image_3d = np.dstack((depth, depth, depth))
+            bg_removed = np.where((depth_image_3d >clipping_distance) | (depth_image_3d <= 0 ), gray_color, rgb)
+            depth_colormap = cv2.applyColorMap(cv2.convertScaleAbs(depth, alpha= 0.03 ), cv2.COLORMAP_JET)
+            images = np.hstack((bg_removed, depth_colormap))
+            # cv2.imshow("merged rgbd", cv2.cvtColor(images, cv2.COLOR_BGR2RGB))
 
             # DF pose estimation
             pe = pose_estimation(mask_rcnn, pose, refiner, objId, rgb, depth) 
