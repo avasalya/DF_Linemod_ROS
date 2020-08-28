@@ -98,24 +98,6 @@ class pose_estimation:
         self.refiner = refiner
         self.object_index = object_index_
 
-        # cam @ aist
-        self.cam_fx = 605.286
-        self.cam_cx = 320.075
-        self.cam_fy = 605.699
-        self.cam_cy = 247.877
-
-        # cam depth @ aist
-        # self.cam_cx = 160.037
-        # self.cam_cy = 123.938
-        # self.cam_fx = 302.643
-        # self.cam_fy = 302.85
-
-        # cam @ tx
-        # self.cam_fx = 611.586
-        # self.cam_cx = 324.002
-        # self.cam_fy = 611.837
-        # self.cam_cy = 235.856
-
         self.xmap = np.array([[j for i in range(640)] for j in range(480)]) 
         self.ymap = np.array([[i for i in range(640)] for j in range(480)])
 
@@ -155,15 +137,15 @@ class pose_estimation:
         # pinhole camera model
         # u = fx * x/z + cx
         # v = fy * y/z + cy
-        # https://docs.opencv.org/2.4/modules/calib3d/doc/camera_calibration_and_3d_reconstruction.html
-        p0 = (int((tar[0][0]/ tar[0][2])*self.cam_fx + self.cam_cx),  int((tar[0][1]/ tar[0][2])*self.cam_fy + self.cam_cy))
-        p1 = (int((tar[1][0]/ tar[1][2])*self.cam_fx + self.cam_cx),  int((tar[1][1]/ tar[1][2])*self.cam_fy + self.cam_cy))
-        p2 = (int((tar[2][0]/ tar[2][2])*self.cam_fx + self.cam_cx),  int((tar[2][1]/ tar[2][2])*self.cam_fy + self.cam_cy))
-        p3 = (int((tar[3][0]/ tar[3][2])*self.cam_fx + self.cam_cx),  int((tar[3][1]/ tar[3][2])*self.cam_fy + self.cam_cy))
-        p4 = (int((tar[4][0]/ tar[4][2])*self.cam_fx + self.cam_cx),  int((tar[4][1]/ tar[4][2])*self.cam_fy + self.cam_cy))
-        p5 = (int((tar[5][0]/ tar[5][2])*self.cam_fx + self.cam_cx),  int((tar[5][1]/ tar[5][2])*self.cam_fy + self.cam_cy))
-        p6 = (int((tar[6][0]/ tar[6][2])*self.cam_fx + self.cam_cx),  int((tar[6][1]/ tar[6][2])*self.cam_fy + self.cam_cy))
-        p7 = (int((tar[7][0]/ tar[7][2])*self.cam_fx + self.cam_cx),  int((tar[7][1]/ tar[7][2])*self.cam_fy + self.cam_cy))
+        # https://docs.opencv.org/master/d9/d0c/group__calib3d.html#ga50620f0e26e02caa2e9adc07b5fbf24e
+        p0 = (int((tar[0][0]/ tar[0][2])*cam_fx + cam_cx),  int((tar[0][1]/ tar[0][2])*cam_fy + cam_cy))
+        p1 = (int((tar[1][0]/ tar[1][2])*cam_fx + cam_cx),  int((tar[1][1]/ tar[1][2])*cam_fy + cam_cy))
+        p2 = (int((tar[2][0]/ tar[2][2])*cam_fx + cam_cx),  int((tar[2][1]/ tar[2][2])*cam_fy + cam_cy))
+        p3 = (int((tar[3][0]/ tar[3][2])*cam_fx + cam_cx),  int((tar[3][1]/ tar[3][2])*cam_fy + cam_cy))
+        p4 = (int((tar[4][0]/ tar[4][2])*cam_fx + cam_cx),  int((tar[4][1]/ tar[4][2])*cam_fy + cam_cy))
+        p5 = (int((tar[5][0]/ tar[5][2])*cam_fx + cam_cx),  int((tar[5][1]/ tar[5][2])*cam_fy + cam_cy))
+        p6 = (int((tar[6][0]/ tar[6][2])*cam_fx + cam_cx),  int((tar[6][1]/ tar[6][2])*cam_fy + cam_cy))
+        p7 = (int((tar[7][0]/ tar[7][2])*cam_fx + cam_cx),  int((tar[7][1]/ tar[7][2])*cam_fy + cam_cy))
         
         r = 255 # int(np.random.choice(range(255)))
         g = 255 # int(np.random.choice(range(255)))
@@ -191,7 +173,6 @@ class pose_estimation:
         return p0, p7
 
     def draw_axis(self, img, R, t, K):
-        # https://html.developreference.com/article/18553447/
         # How+to+draw+3D+Coordinate+Axes+with+OpenCV+for+face+pose+estimation%3f
         rotV, _ = cv2.Rodrigues(R)
         points = np.float32([[.1, 0, 0], [0, .1, 0], [0, 0, .1], [0, 0, 0]]).reshape(-1, 3)
@@ -201,11 +182,21 @@ class pose_estimation:
         img = cv2.line(img, tuple(axisPoints[3].ravel()), tuple(axisPoints[2].ravel()), (0,0,255), 3)
         return img
 
+    def draw_cloudPts(self, img, imgpts, label):
+        color = [[254,0,0],[254,244,0],[171,242,0],[0,216,254],[1,0,254],[95,0,254],[254,0,221],[0,0,0],[153,56,0],[138,36,124],[107,153,0],[5,0,153],[76,76,76],[32,153,67],[41,20,240],[230,111,240],[211,222,6],[40,233,70],[130,24,70],[244,200,210],[70,80,90],[30,40,30]]
+        for point in imgpts:
+
+            img=cv2.circle(img,(int(point[0][0]),int(point[0][1])), 1, color[int(label)], -1)
+            # cv2.imshow('color', img)
+        return img 
+
     def pose(self):
         
+        my_result = []
+        
         mask, bbox, viz = self.draw_seg(self.batch_predict())
-        # cv2.imshow("rgb", cv2.cvtColor(viz, cv2.COLOR_BGR2RGB)), cv2.waitKey(1)
-    
+        # cv2.imshow("mask", cv2.cvtColor(viz, cv2.COLOR_BGR2RGB)), cv2.moveWindow('mask', 0, 500) 
+        
         pred = mask
         pred = pred *255
         pred = np.transpose(pred, (1, 2, 0)) # (CxHxW)->(HxWxC)
@@ -228,7 +219,6 @@ class pose_estimation:
             cmax = int(bbox[b,3])
 
             img = np.transpose(rgb_original, (0, 1, 2)) #CxHxW
-            img_masked = img[:, rmin : rmax, cmin : cmax ]
             choose = mask[rmin : rmax, cmin : cmax].flatten().nonzero()[0]
             
             if len(choose) == 0:
@@ -253,14 +243,15 @@ class pose_estimation:
 
             cam_scale = mm2m
             pt2 = depth_masked/cam_scale
-            pt0 = (ymap_masked - self.cam_cx) * pt2 / self.cam_fx
-            pt1 = (xmap_masked - self.cam_cy) * pt2 / self.cam_fy
+            pt0 = (ymap_masked - cam_cx) * pt2 / cam_fx
+            pt1 = (xmap_masked - cam_cy) * pt2 / cam_fy
             cloud = np.concatenate((pt0, pt1, pt2), axis=1)
             cloud = cloud /1000
 
             points = torch.from_numpy(cloud.astype(np.float32))
             choose = torch.LongTensor(choose.astype(np.int32))
-            
+
+            img_masked = img[:, rmin : rmax, cmin : cmax ]
             img_ = norm(torch.from_numpy(img_masked.astype(np.float32)))
             idx = torch.LongTensor([self.object_index])
             img_ = Variable(img_).cuda().unsqueeze(0)
@@ -280,92 +271,100 @@ class pose_estimation:
             my_t = (points.view(bs * num_points, 1, 3) + pred_t)[which_max[0]].view(-1).cpu().data.numpy()
             my_pred = np.append(my_r, my_t)
 
-            for ite in range(0, iteration):
+            # for ite in range(0, iteration):
                 
-                T = Variable(torch.from_numpy(my_t.astype(np.float32))).cuda().view(1, 3).repeat(num_points, 1).contiguous().view(1, num_points, 3)
-                my_mat = quaternion_matrix(my_r)
-                R = Variable(torch.from_numpy(my_mat[:3, :3].astype(np.float32))).cuda().view(1, 3, 3)
-                my_mat[0:3, 3] = my_t
+            #     T = Variable(torch.from_numpy(my_t.astype(np.float32))).cuda().view(1, 3).repeat(num_points, 1).contiguous().view(1, num_points, 3)
+            #     my_mat = quaternion_matrix(my_r)
+            #     R = Variable(torch.from_numpy(my_mat[:3, :3].astype(np.float32))).cuda().view(1, 3, 3)
+            #     my_mat[0:3, 3] = my_t
                 
-                new_points = torch.bmm((points - T), R).contiguous()
-                pred_r, pred_t = self.refiner(new_points, emb, idx)
-                pred_r = pred_r.view(1, 1, -1)
-                pred_r = pred_r / (torch.norm(pred_r, dim=2).view(1, 1, 1))
-                my_r_2 = pred_r.view(-1).cpu().data.numpy()
-                my_t_2 = pred_t.view(-1).cpu().data.numpy()
-                my_mat_2 = quaternion_matrix(my_r_2)
-                my_mat_2[0:3, 3] = my_t_2
+            #     new_points = torch.bmm((points - T), R).contiguous()
+            #     pred_r, pred_t = self.refiner(new_points, emb, idx)
+            #     pred_r = pred_r.view(1, 1, -1)
+            #     pred_r = pred_r / (torch.norm(pred_r, dim=2).view(1, 1, 1))
+            #     my_r_2 = pred_r.view(-1).cpu().data.numpy()
+            #     my_t_2 = pred_t.view(-1).cpu().data.numpy()
+            #     my_mat_2 = quaternion_matrix(my_r_2)
+            #     my_mat_2[0:3, 3] = my_t_2
 
-                my_mat_final = np.dot(my_mat, my_mat_2) # refine pose means two matrix multiplication
-                my_r_final = copy.deepcopy(my_mat_final)
-                my_r_final[0:3, 3] = 0
-                my_r_final = quaternion_from_matrix(my_r_final, True)
-                my_t_final = np.array([my_mat_final[0][3], my_mat_final[1][3], my_mat_final[2][3]])
+            #     my_mat_final = np.dot(my_mat, my_mat_2) # refine pose means two matrix multiplication
+            #     my_r_final = copy.deepcopy(my_mat_final)
+            #     my_r_final[0:3, 3] = 0
+            #     my_r_final = quaternion_from_matrix(my_r_final, True)
+            #     my_t_final = np.array([my_mat_final[0][3], my_mat_final[1][3], my_mat_final[2][3]])
 
-                my_pred = np.append(my_r_final, my_t_final)
-                my_r = my_r_final
-                my_t = my_t_final
+            #     my_pred = np.append(my_r_final, my_t_final)
+            #     my_r = my_r_final
+            #     my_t = my_t_final
 
-#TODO visualization
-      
-            """ project point cloud """
-            dist = np.array([0.0, 0.0, 0.0, 0.0, 0.0])
-            cam_mat = np.matrix([
-                                [self.cam_fx, 0, self.cam_cx],
-                                [0, self.cam_fy, self.cam_cy],
-                                [0, 0, 1]])
-            
-            imgpts_cloud, jac = cv2.projectPoints(cloud, np.eye(3), np.zeros(shape=my_t.shape), cam_mat, dist)
-            viz = cv2.polylines(np.array(viz), np.int32([np.squeeze(imgpts_cloud)]), True, (0, 225, 105))
 
-            """ draw cmr 2D box """
-            cv2.rectangle(viz, (cmax, cmin), (rmax, rmin), (255,0,0))
+            # """ get mean depth within a box """
+            # depth = depth[xmin_depth:xmax_depth,ymin_depth:ymax_depth].astype(float)
+            # depth_sensor = profile.get_device().first_depth_sensor()
+            # depth_scale = depth_sensor.get_depth_scale()
+            # depth = depth * depth_scale
+            # dist,_,_,_ = cv2.mean(depth)
+            # print("depth of object", dist)
 
             """ position mm2m """
             my_t = np.array(my_t*mm2m)
             print("Pos xyz:{0}".format(my_t))
-            
+
             """ rotation """
-            my_r = quaternion_matrix(my_r)[:3, :3]
-            # my_r = my_r.T
-            # print('estimated rotation is\n:{0}'.format(my_r))
-            
-            # Rx = rotation_matrix(m.pi/2, [-1, 0, 0], my_t)
+            mat_r = quaternion_matrix(my_r)[:3, :3]
+            # print('estimated rotation is\n:{0}'.format(mat_r))
+
+            """ project point cloud """
+            # imgpts_cloud,_ = cv2.projectPoints(points.cpu().numpy(), np.eye(3), np.zeros(shape=my_t.shape), cam_mat, dist)
+            imgpts_cloud,_ = cv2.projectPoints(np.dot(points.cpu().numpy(), mat_r), mat_r, my_t, cam_mat, dist)
+            # viz = cv2.polylines(np.array(viz), np.int32([np.squeeze(imgpts_cloud)]), True, (0, 225, 105))
+            viz = self.draw_cloudPts(viz, imgpts_cloud, 1)
+
+            """ draw cmr 2D box """
+            cv2.rectangle(viz, (cmax, cmin), (rmax, rmin), (255,0,0))
+
+
+#TODO  use cv.solvePnPRansac()
+            """ introduce offset in R """
+            Rx = rotation_matrix(m.pi/6, [-1, 0, 0], my_t)
             # Ry = rotation_matrix(m.pi/6, [0, 1, 0], my_t)
-            # Rz = rotation_matrix(m.pi/6, [0, 0, 1], my_t)
+            # Rz = rotation_matrix(m.pi/9, [0, 0, 1], my_t)
             # R = concatenate_matrices(Ry, Rx)[:3,:3]
-            # my_r = np.dot(my_r, R[:3, :3])
+            # mat_r = np.dot(mat_r, R[:3, :3])
 
             # get_i = np.eye(4)
-            # # get_i[0:3, 0:3] = my_r
+            # # get_i[0:3, 0:3] = mat_r
             # get_i[-1,:-1] = my_t
             # angle, dirc, pt = rotation_from_matrix(get_i) 
             # R = rotation_matrix(angle, dirc, pt)
-            # my_r = np.dot(my_r, R[:3, :3])
-
-            """ transform 3D box and axis with estimated pose and Draw """
-            target = np.dot(edges, my_r)
-            target = np.add(target, my_t)
-            _,_ = self.draw_cube(target, viz, (255, 255, 255))
-            self.draw_axis(viz, my_r, my_t, cam_mat)
+            # mat_r = np.dot(mat_r, R[:3, :3])
 
             """ add estimated position and Draw 3D box, axis """
-            target = np.add(edges, my_t)
-            p0, p7 = self.draw_cube(target, viz, (255, 165, 0))
-            self.draw_axis(viz, np.eye(3), my_t, cam_mat)
+            # target_cam = np.add(edges, my_t)
+            # p0, p7 = self.draw_cube(target_cam, viz, (255, 165, 0))
+            # self.draw_axis(viz, np.eye(3), my_t, cam_mat)
             
             """ align 2d bbox with 3D box face """
             # cv2.rectangle(viz, p0, p7, (0,0,255))
 
+            """ transform 3D box and axis with estimated pose and Draw """
+            # mat_r  = np.dot(np.linalg.inv(mat_r), mat_r.T)
+            # mat_r = np.dot(mat_r, Rx[:3, :3])
+            # mat_r = mat_r.T
+            target_df = np.dot(edges, mat_r)
+            target_df = np.add(target_df, my_t)
+            _,_ = self.draw_cube(target_df, viz, (255, 255, 255))
+            self.draw_axis(viz, mat_r, my_t, cam_mat)
+
             cv2.imshow("pose", cv2.cvtColor(viz, cv2.COLOR_BGR2RGB))
-            cv2.moveWindow('pose', 0, 0) 
+            cv2.moveWindow('pose', 0, 0)
             
         return viz
 
 
 if __name__ == '__main__':
     
-    autostop = 20
+    autostop = 200
     
     bs = 1
     objId = 0
@@ -374,15 +373,37 @@ if __name__ == '__main__':
     iteration = 2
     class_names = ['txonigiri']
 
+    # cam @ aist
+    cam_fx = 605.286
+    cam_cx = 320.075
+    cam_fy = 605.699
+    cam_cy = 247.877
+
+    # cam depth @ aist
+    # cam_cx = 160.037
+    # cam_cy = 123.938
+    # cam_fx = 302.643
+    # cam_fy = 302.85
+
+    # cam @ tx
+    # cam_fx = 611.586
+    # cam_cx = 324.002
+    # cam_fy = 611.837
+    # cam_cy = 235.856
+
+    dist = np.array([0.0, 0.0, 0.0, 0.0, 0.0])
+    cam_mat = np.matrix([ [cam_fx, 0, cam_cx], [0, cam_fy, cam_cy], [0, 0, 1] ])
+
     edge = 70.
-    edges = np.array([ [-edge,-edge, edge],
-                        [-edge,-edge,-edge],
-                        [ edge,-edge,-edge],
-                        [ edge,-edge, edge],
-                        [-edge, edge, edge],
-                        [-edge, edge,-edge],
-                        [ edge, edge,-edge],
-                        [ edge, edge, edge]])
+    edges = np.array([ [-edge,-edge, edge], # 1
+                       [-edge,-edge,-edge], # 2
+                       [ edge,-edge,-edge], # 3
+                       [ edge,-edge, edge], # 4
+                       [-edge, edge, edge], # 5
+                       [-edge, edge,-edge], # 6
+                       [ edge, edge,-edge], # 7
+                       [ edge, edge, edge], # 8
+                    ])    
     edges = edges * mm2m
 
     # Stream (Color/Depth) settings
@@ -417,25 +438,6 @@ if __name__ == '__main__':
             # depth_frame = rs.colorizer().colorize(depth_frame)
             depth = np.asanyarray(depth_frame.get_data())
 
-            # get intrinsics & extrinsics
-            # this_frame = color_frame # depth_frame
-            # intr = this_frame.get_profile().as_video_stream_profile().get_intrinsics()
-            # print("intrinsics", intr)
-            # extr = rs.extrinsics()
-            # print("extrinsics", extr)
-            
-            # get depth of a pixel
-            # pixel_distance_in_meters = depth_frame.get_distance(247,191)
-            # print(pixel_distance_in_meters)
-
-            # get mean depth within a box
-            # depth = depth[xmin_depth:xmax_depth,ymin_depth:ymax_depth].astype(float)
-            # depth_sensor = profile.get_device().first_depth_sensor()
-            # depth_scale = depth_sensor.get_depth_scale()
-            # depth = depth * depth_scale
-            # dist,_,_,_ = cv2.mean(depth)
-            # print("depth of object", dist)
-
             # DF pose estimation
             pe = pose_estimation(mask_rcnn, pose, refiner, objId, rgb, depth) 
             pe.pose()
@@ -454,3 +456,5 @@ if __name__ == '__main__':
     finally:
         pipeline.stop()
         cv2.destroyAllWindows()
+
+# %%
