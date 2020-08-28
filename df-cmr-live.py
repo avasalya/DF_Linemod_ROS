@@ -136,74 +136,6 @@ class pose_estimation:
 
         return (mask, bbox, viz)
 
-    def draw_cube(self, tar, img, color):
-        # pinhole camera model/ project the cubeoid on the image plane using camera intrinsics
-        # u = fx * x/z + cx
-        # v = fy * y/z + cy
-        # https://docs.opencv.org/master/d9/d0c/group__calib3d.html#ga50620f0e26e02caa2e9adc07b5fbf24e
-        p0 = (int((tar[0][0]/ tar[0][2])*cam_fx + cam_cx),  int((tar[0][1]/ tar[0][2])*cam_fy + cam_cy))
-        p1 = (int((tar[1][0]/ tar[1][2])*cam_fx + cam_cx),  int((tar[1][1]/ tar[1][2])*cam_fy + cam_cy))
-        p2 = (int((tar[2][0]/ tar[2][2])*cam_fx + cam_cx),  int((tar[2][1]/ tar[2][2])*cam_fy + cam_cy))
-        p3 = (int((tar[3][0]/ tar[3][2])*cam_fx + cam_cx),  int((tar[3][1]/ tar[3][2])*cam_fy + cam_cy))
-        p4 = (int((tar[4][0]/ tar[4][2])*cam_fx + cam_cx),  int((tar[4][1]/ tar[4][2])*cam_fy + cam_cy))
-        p5 = (int((tar[5][0]/ tar[5][2])*cam_fx + cam_cx),  int((tar[5][1]/ tar[5][2])*cam_fy + cam_cy))
-        p6 = (int((tar[6][0]/ tar[6][2])*cam_fx + cam_cx),  int((tar[6][1]/ tar[6][2])*cam_fy + cam_cy))
-        p7 = (int((tar[7][0]/ tar[7][2])*cam_fx + cam_cx),  int((tar[7][1]/ tar[7][2])*cam_fy + cam_cy))
-        
-        points = []
-        points.append(tuple(p0))
-        points.append(tuple(p1))
-        points.append(tuple(p2))
-        points.append(tuple(p3))
-        points.append(tuple(p4))
-        points.append(tuple(p5))
-        points.append(tuple(p6))
-        points.append(tuple(p7))
-
-        r = 255 # int(np.random.choice(range(255)))
-        g = 255 # int(np.random.choice(range(255)))
-        b = 255 # int(np.random.choice(range(255)))
-
-        # cv2.line(img, p0, p1, (0,0,b), 2)
-        # cv2.line(img, p0, p3, (r,0,0), 2)
-        # cv2.line(img, p0, p4, (0,g,0), 2)
-        
-        # cv2.line(img, p0, p1, color, 2)
-        # cv2.line(img, p0, p3, color, 2)
-        # cv2.line(img, p0, p4, color, 2)
-        # cv2.line(img, p1, p2, color, 2)
-        # cv2.line(img, p1, p5, color, 2)
-        # cv2.line(img, p2, p3, color, 2)
-        # cv2.line(img, p2, p6, color, 2)
-        # cv2.line(img, p3, p7, color, 2)
-        # cv2.line(img, p4, p5, color, 2)
-        # cv2.line(img, p4, p7, color, 2)
-        # cv2.line(img, p5, p6, color, 2)
-        # cv2.line(img, p6, p7, color, 2)
-
-        # print(p0, p1, p2, p3, p4, p5, p6, p7)
-        # cv2.rectangle(img, p0, p7, (0,0,255))
-
-        return p0, p7, points
-
-    def draw_axis(self, img, R, t, K):
-        # How+to+draw+3D+Coordinate+Axes+with+OpenCV+for+face+pose+estimation%3f
-        rotV, _ = cv2.Rodrigues(R)
-        points = np.float32([[.1, 0, 0], [0, .1, 0], [0, 0, .1], [0, 0, 0]]).reshape(-1, 3)
-        axisPoints, _ = cv2.projectPoints(points, rotV, t, K, (0, 0, 0, 0))
-        img = cv2.line(img, tuple(axisPoints[3].ravel()), tuple(axisPoints[0].ravel()), (255,0,0), 3)
-        img = cv2.line(img, tuple(axisPoints[3].ravel()), tuple(axisPoints[1].ravel()), (0,255,0), 3)
-        img = cv2.line(img, tuple(axisPoints[3].ravel()), tuple(axisPoints[2].ravel()), (0,0,255), 3)
-        return img
-
-    def draw_cloudPts(self, img, imgpts, label):
-        color = [[254,0,0],[254,244,0],[171,242,0],[0,216,254],[1,0,254],[95,0,254],[254,0,221],[0,0,0],[153,56,0],[138,36,124],[107,153,0],[5,0,153],[76,76,76],[32,153,67],[41,20,240],[230,111,240],[211,222,6],[40,233,70],[130,24,70],[244,200,210],[70,80,90],[30,40,30]]
-        for point in imgpts:
-
-            img=cv2.circle(img,(int(point[0][0]),int(point[0][1])), 1, color[int(label)], -1)
-            # cv2.imshow('color', img)
-        return img 
-
     def pose(self):
         
         my_result = []
@@ -254,7 +186,6 @@ class pose_estimation:
             xmap_masked = self.xmap[rmin:rmax, cmin:cmax].flatten()[choose][:, np.newaxis].astype(np.float32)
             ymap_masked = self.ymap[rmin:rmax, cmin:cmax].flatten()[choose][:, np.newaxis].astype(np.float32)
             choose = np.array([choose])
-
             cam_scale = mm2m
             pt2 = depth_masked/cam_scale
             pt0 = (ymap_masked - cam_cx) * pt2 / cam_fx
@@ -285,43 +216,42 @@ class pose_estimation:
             my_t = (points.view(bs * num_points, 1, 3) + pred_t)[which_max[0]].view(-1).cpu().data.numpy()
             my_pred = np.append(my_r, my_t)
 
-            # for ite in range(0, iteration):
+            for ite in range(0, iteration):
                 
-            #     T = Variable(torch.from_numpy(my_t.astype(np.float32))).cuda().view(1, 3).repeat(num_points, 1).contiguous().view(1, num_points, 3)
-            #     my_mat = quaternion_matrix(my_r)
-            #     R = Variable(torch.from_numpy(my_mat[:3, :3].astype(np.float32))).cuda().view(1, 3, 3)
-            #     my_mat[0:3, 3] = my_t
+                T = Variable(torch.from_numpy(my_t.astype(np.float32))).cuda().view(1, 3).repeat(num_points, 1).contiguous().view(1, num_points, 3)
+                my_mat = quaternion_matrix(my_r)
+                R = Variable(torch.from_numpy(my_mat[:3, :3].astype(np.float32))).cuda().view(1, 3, 3)
+                my_mat[0:3, 3] = my_t
                 
-            #     new_points = torch.bmm((points - T), R).contiguous()
-            #     pred_r, pred_t = self.refiner(new_points, emb, idx)
-            #     pred_r = pred_r.view(1, 1, -1)
-            #     pred_r = pred_r / (torch.norm(pred_r, dim=2).view(1, 1, 1))
-            #     my_r_2 = pred_r.view(-1).cpu().data.numpy()
-            #     my_t_2 = pred_t.view(-1).cpu().data.numpy()
-            #     my_mat_2 = quaternion_matrix(my_r_2)
-            #     my_mat_2[0:3, 3] = my_t_2
+                new_points = torch.bmm((points - T), R).contiguous()
+                pred_r, pred_t = self.refiner(new_points, emb, idx)
+                pred_r = pred_r.view(1, 1, -1)
+                pred_r = pred_r / (torch.norm(pred_r, dim=2).view(1, 1, 1))
+                my_r_2 = pred_r.view(-1).cpu().data.numpy()
+                my_t_2 = pred_t.view(-1).cpu().data.numpy()
+                my_mat_2 = quaternion_matrix(my_r_2)
+                my_mat_2[0:3, 3] = my_t_2
 
-            #     my_mat_final = np.dot(my_mat, my_mat_2) # refine pose means two matrix multiplication
-            #     my_r_final = copy.deepcopy(my_mat_final)
-            #     my_r_final[0:3, 3] = 0
-            #     my_r_final = quaternion_from_matrix(my_r_final, True)
-            #     my_t_final = np.array([my_mat_final[0][3], my_mat_final[1][3], my_mat_final[2][3]])
+                my_mat_final = np.dot(my_mat, my_mat_2) # refine pose means two matrix multiplication
+                my_r_final = copy.deepcopy(my_mat_final)
+                my_r_final[0:3, 3] = 0
+                my_r_final = quaternion_from_matrix(my_r_final, True)
+                my_t_final = np.array([my_mat_final[0][3], my_mat_final[1][3], my_mat_final[2][3]])
 
-            #     my_pred = np.append(my_r_final, my_t_final)
-            #     my_r = my_r_final
-            #     my_t = my_t_final
+                my_pred = np.append(my_r_final, my_t_final)
+                my_r = my_r_final
+                my_t = my_t_final
 
+#TODO  use cv.solvePnP or ICP
 
-            # """ get mean depth within a box """
-            # depth = depth[xmin_depth:xmax_depth,ymin_depth:ymax_depth].astype(float)
-            # depth_sensor = profile.get_device().first_depth_sensor()
-            # depth_scale = depth_sensor.get_depth_scale()
-            # depth = depth * depth_scale
-            # dist,_,_,_ = cv2.mean(depth)
-            # print("depth of object", dist)
-
+            """ get mean depth within a box as depth offset """
+            depth = self.depth[rmin : rmax, cmin : cmax].astype(float)
+            depth = depth * mm2m
+            dist,_,_,_ = cv2.mean(depth)
+            
             """ position mm2m """
             my_t = np.array(my_t*mm2m)
+            my_t[2] = dist
             print("Pos xyz:{0}".format(my_t))
 
             """ rotation """
@@ -330,52 +260,43 @@ class pose_estimation:
 
             """ project point cloud """
             imgpts_cloud,_ = cv2.projectPoints(np.dot(points.cpu().numpy(), mat_r), mat_r, my_t, cam_mat, dist)
-            viz = self.draw_cloudPts(viz, imgpts_cloud, 1)
+            viz = draw_cloudPts(viz, imgpts_cloud, 1)
 
             """ draw cmr 2D box """
             cv2.rectangle(viz, (cmax, cmin), (rmax, rmin), (255,0,0))
 
-
-#TODO  use cv.solvePnPRansac()
-            """ introduce offset in R """
-            Rx = rotation_matrix(m.pi/6, [-1, 0, 0], my_t)
-            # Ry = rotation_matrix(m.pi/6, [0, 1, 0], my_t)
-            # Rz = rotation_matrix(m.pi/9, [0, 0, 1], my_t)
-            # R = concatenate_matrices(Ry, Rx)[:3,:3]
-            # mat_r = np.dot(mat_r, R[:3, :3])
-
-            # get_i = np.eye(4)
-            # # get_i[0:3, 0:3] = mat_r
-            # get_i[-1,:-1] = my_t
-            # angle, dirc, pt = rotation_from_matrix(get_i) 
-            # R = rotation_matrix(angle, dirc, pt)
-            # mat_r = np.dot(mat_r, R[:3, :3])
-
             """ add estimated position and Draw 3D box, axis """
             # target_cam = np.add(edges, my_t)
-            # p0, p7 = self.draw_cube(target_cam, viz, (255, 165, 0))
-            # self.draw_axis(viz, np.eye(3), my_t, cam_mat)
+            # new_image = cv2pil(viz)
+            # g_draw = ImageDraw.Draw(new_image)
+            # p0, p7 = draw_cube(target_cam, viz, g_draw, (255, 165, 0))
+            # viz = pil2cv(new_image)
+            # draw_axis(viz, np.eye(3), my_t, cam_mat)
             
             """ align 2d bbox with 3D box face """
             # cv2.rectangle(viz, p0, p7, (0,0,255))
 
+            """ introduce offset in Rot """
+            get_i = np.eye(4)
+            get_i[0:3, 0:3] = mat_r
+            get_i[-1,:-1] = my_t
+            angle, dirc, pt = rotation_from_matrix(get_i) 
+            # print(angle, dirc, pt)
+            R = rotation_matrix(angle, dirc, pt)
+            # print("rotation mat\n", R)
+            # R = rotation_matrix(-2.623, [-0.969, 0.0336, -0.246], [0, 0, 0, 1])
+            
             """ transform 3D box and axis with estimated pose and Draw """
-            # mat_r  = np.dot(np.linalg.inv(mat_r), mat_r.T)
-            # mat_r = np.dot(mat_r, Rx[:3, :3])
-            # mat_r = mat_r.T
+            
+            mat_r = np.dot(mat_r.T, R[:3, :3])
             target_df = np.dot(edges, mat_r)
-            target_df = np.add(target_df, my_t)
-            _,_, points = self.draw_cube(target_df, viz, (255, 255, 255))
-            self.draw_axis(viz, mat_r, my_t, cam_mat)
-
-
-            """ DOPE cuboid """
+            target_df = np.add(target_df, my_t)            
             new_image = cv2pil(viz)
             g_draw = ImageDraw.Draw(new_image)
-            DrawCube(g_draw, points, (255, 101, 0))
+            _,_ = draw_cube(target_df, viz, g_draw, (255, 255, 255))
             viz = pil2cv(new_image)
-            # cv2.imshow("newcube", viz)
-            
+            draw_axis(viz, mat_r, my_t, cam_mat)
+
             """ viz pred pose  """
             cv2.imshow("pose", cv2.cvtColor(viz, cv2.COLOR_BGR2RGB))
             cv2.moveWindow('pose', 0, 0)
@@ -383,20 +304,31 @@ class pose_estimation:
         return viz
 
 
-""" https://qiita.com/derodero24/items/f22c22b22451609908ee """
+def draw_axis(img, R, t, K):
+    # How+to+draw+3D+Coordinate+Axes+with+OpenCV+for+face+pose+estimation%3f
+    rotV, _ = cv2.Rodrigues(R)
+    points = np.float32([[.1, 0, 0], [0, .1, 0], [0, 0, .1], [0, 0, 0]]).reshape(-1, 3)
+    axisPoints, _ = cv2.projectPoints(points, rotV, t, K, (0, 0, 0, 0))
+    img = cv2.line(img, tuple(axisPoints[3].ravel()), tuple(axisPoints[0].ravel()), (255,0,0), 3)
+    img = cv2.line(img, tuple(axisPoints[3].ravel()), tuple(axisPoints[1].ravel()), (0,255,0), 3)
+    img = cv2.line(img, tuple(axisPoints[3].ravel()), tuple(axisPoints[2].ravel()), (0,0,255), 3)
+    return img
+
+def draw_cloudPts(img, imgpts, label):
+    color = [[254,0,0],[254,244,0],[171,242,0],[0,216,254],[1,0,254],[95,0,254],[254,0,221],[0,0,0],[153,56,0],[138,36,124],[107,153,0],[5,0,153],[76,76,76],[32,153,67],[41,20,240],[230,111,240],[211,222,6],[40,233,70],[130,24,70],[244,200,210],[70,80,90],[30,40,30]]
+    for point in imgpts:
+
+        img=cv2.circle(img,(int(point[0][0]),int(point[0][1])), 1, color[int(label)], -1)
+        # cv2.imshow('color', img)
+    return img 
+
 def pil2cv(image):
     new_image = np.array(image, dtype=np.uint8)
-    if new_image.ndim == 2:  # モノクロ
-        pass
-    elif new_image.shape[2] == 3:  # カラー
-        new_image = cv2.cvtColor(new_image, cv2.COLOR_BGR2RGB)
-    elif new_image.shape[2] == 4:  # 透過
-        new_image = cv2.cvtColor(new_image, cv2.COLOR_RGBA2BGRA)
+    new_image = cv2.cvtColor(new_image, cv2.COLOR_BGR2RGB)
     return new_image
 
 def cv2pil(image):
-    new_image = image.copy()
-    new_image = cv2.cvtColor(new_image, cv2.COLOR_BGR2RGB)
+    new_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
     new_image = Image.fromarray(new_image)
     return new_image
 
@@ -422,12 +354,34 @@ def DrawDot(g_draw, point, pointColor, pointRadius):
                        outline=pointColor
                        )
 
-def DrawCube(g_draw, points, color=(255, 0, 0)):
+def draw_cube(tar, img, g_draw, color):
+    # pinhole camera model/ project the cubeoid on the image plane using camera intrinsics
+    # u = fx * x/z + cx
+    # v = fy * y/z + cy
+    # https://docs.opencv.org/master/d9/d0c/group__calib3d.html#ga50620f0e26e02caa2e9adc07b5fbf24e
+    p0 = (int((tar[0][0]/ tar[0][2])*cam_fx + cam_cx),  int((tar[0][1]/ tar[0][2])*cam_fy + cam_cy))
+    p1 = (int((tar[1][0]/ tar[1][2])*cam_fx + cam_cx),  int((tar[1][1]/ tar[1][2])*cam_fy + cam_cy))
+    p2 = (int((tar[2][0]/ tar[2][2])*cam_fx + cam_cx),  int((tar[2][1]/ tar[2][2])*cam_fy + cam_cy))
+    p3 = (int((tar[3][0]/ tar[3][2])*cam_fx + cam_cx),  int((tar[3][1]/ tar[3][2])*cam_fy + cam_cy))
+    p4 = (int((tar[4][0]/ tar[4][2])*cam_fx + cam_cx),  int((tar[4][1]/ tar[4][2])*cam_fy + cam_cy))
+    p5 = (int((tar[5][0]/ tar[5][2])*cam_fx + cam_cx),  int((tar[5][1]/ tar[5][2])*cam_fy + cam_cy))
+    p6 = (int((tar[6][0]/ tar[6][2])*cam_fx + cam_cx),  int((tar[6][1]/ tar[6][2])*cam_fy + cam_cy))
+    p7 = (int((tar[7][0]/ tar[7][2])*cam_fx + cam_cx),  int((tar[7][1]/ tar[7][2])*cam_fy + cam_cy))
+    
+    points = []
+    points.append(tuple(p0))
+    points.append(tuple(p1))
+    points.append(tuple(p2))
+    points.append(tuple(p3))
+    points.append(tuple(p4))
+    points.append(tuple(p5))
+    points.append(tuple(p6))
+    points.append(tuple(p7))
+
     '''
     Draws cube with a thick solid line across
     the front top edge and an X on the top face.
     '''
-
     lineWidthForDrawing = 2
 
     # draw front
@@ -449,13 +403,40 @@ def DrawCube(g_draw, points, color=(255, 0, 0)):
     DrawLine(g_draw, points[2], points[6], color, lineWidthForDrawing)
 
     # draw dots
-    DrawDot(g_draw, points[0], pointColor=color, pointRadius=4)
-    DrawDot(g_draw, points[1], pointColor=color, pointRadius=4)
+    DrawDot(g_draw, points[0], pointColor=(0,101,255), pointRadius=4)
+    DrawDot(g_draw, points[1], pointColor=(232,12,217), pointRadius=4)
 
     # draw x on the top
     DrawLine(g_draw, points[0], points[5], color, lineWidthForDrawing)
     DrawLine(g_draw, points[1], points[4], color, lineWidthForDrawing)
 
+
+    r = 255 # int(np.random.choice(range(255)))
+    g = 255 # int(np.random.choice(range(255)))
+    b = 255 # int(np.random.choice(range(255)))
+
+    # cv2.line(img, p0, p1, (0,0,b), 2)
+    # cv2.line(img, p0, p3, (r,0,0), 2)
+    # cv2.line(img, p0, p4, (0,g,0), 2)
+    
+    # cv2.line(img, p0, p1, color, 2)
+    # cv2.line(img, p0, p3, color, 2)
+    # cv2.line(img, p0, p4, color, 2)
+    # cv2.line(img, p1, p2, color, 2)
+    # cv2.line(img, p1, p5, color, 2)
+    # cv2.line(img, p2, p3, color, 2)
+    # cv2.line(img, p2, p6, color, 2)
+    # cv2.line(img, p3, p7, color, 2)
+    # cv2.line(img, p4, p5, color, 2)
+    # cv2.line(img, p4, p7, color, 2)
+    # cv2.line(img, p5, p6, color, 2)
+    # cv2.line(img, p6, p7, color, 2)
+
+    # print(p0, p1, p2, p3, p4, p5, p6, p7)
+    # cv2.rectangle(img, p0, p7, (0,0,255))
+
+    return p0, p7
+   
 if __name__ == '__main__':
     
     autostop = 200
@@ -488,7 +469,7 @@ if __name__ == '__main__':
     dist = np.array([0.0, 0.0, 0.0, 0.0, 0.0])
     cam_mat = np.matrix([ [cam_fx, 0, cam_cx], [0, cam_fy, cam_cy], [0, 0, 1] ])
 
-    edge = 70.
+    edge = 50.
     # edges = np.array([ [-edge,-edge, edge], # 1
     #                    [-edge,-edge,-edge], # 2
     #                    [ edge,-edge,-edge], # 3
@@ -560,3 +541,9 @@ if __name__ == '__main__':
         cv2.destroyAllWindows()
 
 # %%
+
+# Rx = rotation_matrix(2*m.pi/3, [1, -1, 0], my_t)
+# Ry = rotation_matrix(m.pi/6, [0, 1, 0], my_t)
+# Rz = rotation_matrix(m.pi/9, [0, 0, 1], my_t)
+# R = concatenate_matrices(Ry, Rx)[:3,:3]
+# mat_r = np.dot(mat_r, R[:3, :3])
