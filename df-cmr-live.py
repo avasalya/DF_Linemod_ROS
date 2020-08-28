@@ -134,7 +134,7 @@ class pose_estimation:
         return (mask, bbox, viz)
 
     def draw_cube(self, tar, img, color):
-        # pinhole camera model
+        # pinhole camera model/ project the cubeoid on the image plane using camera intrinsics
         # u = fx * x/z + cx
         # v = fy * y/z + cy
         # https://docs.opencv.org/master/d9/d0c/group__calib3d.html#ga50620f0e26e02caa2e9adc07b5fbf24e
@@ -395,15 +395,24 @@ if __name__ == '__main__':
     cam_mat = np.matrix([ [cam_fx, 0, cam_cx], [0, cam_fy, cam_cy], [0, 0, 1] ])
 
     edge = 70.
-    edges = np.array([ [-edge,-edge, edge], # 1
-                       [-edge,-edge,-edge], # 2
-                       [ edge,-edge,-edge], # 3
-                       [ edge,-edge, edge], # 4
-                       [-edge, edge, edge], # 5
-                       [-edge, edge,-edge], # 6
-                       [ edge, edge,-edge], # 7
-                       [ edge, edge, edge], # 8
-                    ])    
+    # edges = np.array([ [-edge,-edge, edge], # 1
+    #                    [-edge,-edge,-edge], # 2
+    #                    [ edge,-edge,-edge], # 3
+    #                    [ edge,-edge, edge], # 4
+    #                    [-edge, edge, edge], # 5
+    #                    [-edge, edge,-edge], # 6
+    #                    [ edge, edge,-edge], # 7
+    #                    [ edge, edge, edge], # 8
+    #                 ])    
+    edges  = np.array([
+                    [edge, -edge,  edge],
+                    [edge, -edge, -edge],
+                    [edge,  edge, -edge],
+                    [edge,  edge,  edge],
+                    [-edge,-edge,  edge],
+                    [-edge,-edge, -edge],
+                    [-edge, edge, -edge],
+                    [-edge, edge,  edge]])
     edges = edges * mm2m
 
     # Stream (Color/Depth) settings
@@ -435,7 +444,6 @@ if __name__ == '__main__':
             rgb = cv2.cvtColor(rgb, cv2.COLOR_BGR2RGB)
 
             # Depth image
-            # depth_frame = rs.colorizer().colorize(depth_frame)
             depth = np.asanyarray(depth_frame.get_data())
 
             # DF pose estimation
