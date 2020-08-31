@@ -216,31 +216,30 @@ class pose_estimation:
             my_t = (points.view(bs * num_points, 1, 3) + pred_t)[which_max[0]].view(-1).cpu().data.numpy()
             my_pred = np.append(my_r, my_t)
 
-            for ite in range(0, iteration):
+            # for ite in range(0, iteration):
+            #     T = Variable(torch.from_numpy(my_t.astype(np.float32))).cuda().view(1, 3).repeat(num_points, 1).contiguous().view(1, num_points, 3)
+            #     my_mat = quaternion_matrix(my_r)
+            #     R = Variable(torch.from_numpy(my_mat[:3, :3].astype(np.float32))).cuda().view(1, 3, 3)
+            #     my_mat[0:3, 3] = my_t
                 
-                T = Variable(torch.from_numpy(my_t.astype(np.float32))).cuda().view(1, 3).repeat(num_points, 1).contiguous().view(1, num_points, 3)
-                my_mat = quaternion_matrix(my_r)
-                R = Variable(torch.from_numpy(my_mat[:3, :3].astype(np.float32))).cuda().view(1, 3, 3)
-                my_mat[0:3, 3] = my_t
-                
-                new_points = torch.bmm((points - T), R).contiguous()
-                pred_r, pred_t = self.refiner(new_points, emb, idx)
-                pred_r = pred_r.view(1, 1, -1)
-                pred_r = pred_r / (torch.norm(pred_r, dim=2).view(1, 1, 1))
-                my_r_2 = pred_r.view(-1).cpu().data.numpy()
-                my_t_2 = pred_t.view(-1).cpu().data.numpy()
-                my_mat_2 = quaternion_matrix(my_r_2)
-                my_mat_2[0:3, 3] = my_t_2
+            #     new_points = torch.bmm((points - T), R).contiguous()
+            #     pred_r, pred_t = self.refiner(new_points, emb, idx)
+            #     pred_r = pred_r.view(1, 1, -1)
+            #     pred_r = pred_r / (torch.norm(pred_r, dim=2).view(1, 1, 1))
+            #     my_r_2 = pred_r.view(-1).cpu().data.numpy()
+            #     my_t_2 = pred_t.view(-1).cpu().data.numpy()
+            #     my_mat_2 = quaternion_matrix(my_r_2)
+            #     my_mat_2[0:3, 3] = my_t_2
+            #     # refine pose means two matrix multiplication
+            #     my_mat_final = np.dot(my_mat, my_mat_2)
+            #     my_r_final = copy.deepcopy(my_mat_final)
+            #     my_r_final[0:3, 3] = 0
+            #     my_r_final = quaternion_from_matrix(my_r_final, True)
+            #     my_t_final = np.array([my_mat_final[0][3], my_mat_final[1][3], my_mat_final[2][3]])
 
-                my_mat_final = np.dot(my_mat, my_mat_2) # refine pose means two matrix multiplication
-                my_r_final = copy.deepcopy(my_mat_final)
-                my_r_final[0:3, 3] = 0
-                my_r_final = quaternion_from_matrix(my_r_final, True)
-                my_t_final = np.array([my_mat_final[0][3], my_mat_final[1][3], my_mat_final[2][3]])
-
-                my_pred = np.append(my_r_final, my_t_final)
-                my_r = my_r_final
-                my_t = my_t_final
+            #     my_pred = np.append(my_r_final, my_t_final)
+            #     my_r = my_r_final
+            #     my_t = my_t_final
 
 #TODO  use cv.solvePnP or ICP
 
@@ -280,7 +279,7 @@ class pose_estimation:
             # cv2.rectangle(viz, p0, p7, (0,0,255))
 
             """ introduce offset in Rot """
-            Rx = rotation_matrix(2*m.pi/3, [1, -1, 0], my_t)
+            Rx = rotation_matrix(2*m.pi/3, [1, 0, 0], my_t)
             R = concatenate_matrices(Rx)[:3,:3]
             mat_r = np.dot(mat_r.T, R[:3, :3])
             
