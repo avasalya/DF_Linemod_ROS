@@ -252,7 +252,8 @@ class pose_estimation:
             """ position mm2m """
             my_t = np.array(my_t*mm2m)
             my_t[2] = dep
-            my_t[1] = my_t[1] + 0.05
+            # my_t[1] = my_t[1] + 0.05
+            # my_t[0] = my_t[0] + 0.05
             
             print("Pos xyz:{0}".format(my_t))
 
@@ -279,18 +280,11 @@ class pose_estimation:
             # cv2.rectangle(viz, p0, p7, (0,0,255))
 
             """ introduce offset in Rot """
-            get_i = np.eye(4)
-            get_i[0:3, 0:3] = mat_r
-            get_i[-1,:-1] = my_t
-            angle, dirc, pt = rotation_from_matrix(get_i) 
-            R = rotation_matrix(angle, dirc, pt)
-            # print("rotation mat\n", R)
-            # R = rotation_matrix(-2.623, [-0.969, 0.0336, -0.246], [0, 0, 0, 1])
-            # Rx = rotation_matrix(2*m.pi/3, [1, -1, 0], my_t)
-            # R = concatenate_matrices(Ry, Rx)[:3,:3]
+            Rx = rotation_matrix(2*m.pi/3, [1, -1, 0], my_t)
+            R = concatenate_matrices(Rx)[:3,:3]
+            mat_r = np.dot(mat_r.T, R[:3, :3])
             
             """ transform 3D box and axis with estimated pose and Draw """
-            mat_r = np.dot(mat_r.T, R[:3, :3])
             target_df = np.dot(edges, mat_r)
             target_df = np.add(target_df, my_t)            
             new_image = cv2pil(viz)
@@ -439,7 +433,7 @@ def draw_cube(tar, img, g_draw, color):
    
 if __name__ == '__main__':
     
-    autostop = 200
+    autostop = 100
     
     bs = 1
     objId = 0
