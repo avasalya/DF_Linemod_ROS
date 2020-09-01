@@ -12,6 +12,8 @@ import numpy as np
 import numpy.ma as ma 
 import matplotlib.pyplot as plt
 
+from colorama import Fore, Style
+
 from PIL import Image
 from PIL import ImageDraw
 
@@ -136,6 +138,35 @@ class pose_estimation:
 
         return (mask, bbox, viz)
 
+    def pose_refiner(self, my_t, my_r, points, emb, idx):
+        
+        for ite in range(0, iteration):
+            T = Variable(torch.from_numpy(my_t.astype(np.float32))).cuda().view(1, 3).repeat(num_points, 1).contiguous().view(1, num_points, 3)
+            my_mat = quaternion_matrix(my_r)
+            R = Variable(torch.from_numpy(my_mat[:3, :3].astype(np.float32))).cuda().view(1, 3, 3)
+            my_mat[0:3, 3] = my_t
+            
+            new_points = torch.bmm((points - T), R).contiguous()
+            pred_r, pred_t = self.refiner(new_points, emb, idx)
+            pred_r = pred_r.view(1, 1, -1)
+            pred_r = pred_r / (torch.norm(pred_r, dim=2).view(1, 1, 1))
+            my_r_2 = pred_r.view(-1).cpu().data.numpy()
+            my_t_2 = pred_t.view(-1).cpu().data.numpy()
+            my_mat_2 = quaternion_matrix(my_r_2)
+            my_mat_2[0:3, 3] = my_t_2
+            # refine pose means two matrix multiplication
+            my_mat_final = np.dot(my_mat, my_mat_2)
+            my_r_final = copy.deepcopy(my_mat_final)
+            my_r_final[0:3, 3] = 0
+            my_r_final = quaternion_from_matrix(my_r_final, True)
+            my_t_final = np.array([my_mat_final[0][3], my_mat_final[1][3], my_mat_final[2][3]])
+
+            my_pred = np.append(my_r_final, my_t_final)
+            my_r = my_r_final
+            my_t = my_t_final
+        
+        return my_t, my_r
+
     def pose(self):
         
         my_result = []
@@ -156,6 +187,7 @@ class pose_estimation:
         mask_depth = ma.getmaskarray(ma.masked_not_equal(self.depth, 0))
         mask_label = ma.getmaskarray(ma.masked_equal(pred, np.array(255)))
 
+        # iterate through detected masks
         for b in range(len(bbox)):
 
             mask = mask_depth * mask_label[:,:,b]        
@@ -164,9 +196,11 @@ class pose_estimation:
             cmin = int(bbox[b,2])
             cmax = int(bbox[b,3])
 
+            # visualize each masks
+            # plt.imshow(mask), plt.show()
+
             img = np.transpose(rgb_original, (0, 1, 2)) #CxHxW
             choose = mask[rmin : rmax, cmin : cmax].flatten().nonzero()[0]
-            
             if len(choose) == 0:
                 cc = torch.LongTensor([0])
                 return(cc, cc, cc, cc, cc, cc)
@@ -178,23 +212,20 @@ class pose_estimation:
                 choose = choose[c_mask.nonzero()]
             else:
                 choose = np.pad(choose, (0, num_points - len(choose)), 'wrap')
-        
-            # visualize each masks
-            # plt.imshow(mask), plt.show()
             
             depth_masked = self.depth[rmin:rmax, cmin:cmax].flatten()[choose][:, np.newaxis].astype(np.float32)
             xmap_masked = self.xmap[rmin:rmax, cmin:cmax].flatten()[choose][:, np.newaxis].astype(np.float32)
             ymap_masked = self.ymap[rmin:rmax, cmin:cmax].flatten()[choose][:, np.newaxis].astype(np.float32)
             choose = np.array([choose])
+            choose = torch.LongTensor(choose.astype(np.int32))
+
             cam_scale = mm2m
             pt2 = depth_masked/cam_scale
             pt0 = (ymap_masked - cam_cx) * pt2 / cam_fx
             pt1 = (xmap_masked - cam_cy) * pt2 / cam_fy
             cloud = np.concatenate((pt0, pt1, pt2), axis=1)
             cloud = cloud /1000
-
             points = torch.from_numpy(cloud.astype(np.float32))
-            choose = torch.LongTensor(choose.astype(np.int32))
 
             img_masked = img[:, rmin : rmax, cmin : cmax ]
             img_ = norm(torch.from_numpy(img_masked.astype(np.float32)))
@@ -216,30 +247,8 @@ class pose_estimation:
             my_t = (points.view(bs * num_points, 1, 3) + pred_t)[which_max[0]].view(-1).cpu().data.numpy()
             my_pred = np.append(my_r, my_t)
 
-            # for ite in range(0, iteration):
-            #     T = Variable(torch.from_numpy(my_t.astype(np.float32))).cuda().view(1, 3).repeat(num_points, 1).contiguous().view(1, num_points, 3)
-            #     my_mat = quaternion_matrix(my_r)
-            #     R = Variable(torch.from_numpy(my_mat[:3, :3].astype(np.float32))).cuda().view(1, 3, 3)
-            #     my_mat[0:3, 3] = my_t
-                
-            #     new_points = torch.bmm((points - T), R).contiguous()
-            #     pred_r, pred_t = self.refiner(new_points, emb, idx)
-            #     pred_r = pred_r.view(1, 1, -1)
-            #     pred_r = pred_r / (torch.norm(pred_r, dim=2).view(1, 1, 1))
-            #     my_r_2 = pred_r.view(-1).cpu().data.numpy()
-            #     my_t_2 = pred_t.view(-1).cpu().data.numpy()
-            #     my_mat_2 = quaternion_matrix(my_r_2)
-            #     my_mat_2[0:3, 3] = my_t_2
-            #     # refine pose means two matrix multiplication
-            #     my_mat_final = np.dot(my_mat, my_mat_2)
-            #     my_r_final = copy.deepcopy(my_mat_final)
-            #     my_r_final[0:3, 3] = 0
-            #     my_r_final = quaternion_from_matrix(my_r_final, True)
-            #     my_t_final = np.array([my_mat_final[0][3], my_mat_final[1][3], my_mat_final[2][3]])
-
-            #     my_pred = np.append(my_r_final, my_t_final)
-            #     my_r = my_r_final
-            #     my_t = my_t_final
+            # DF refiner ---results are better without refiner
+            # my_t, my_r = self.pose_refiner(my_t, my_r, points, emb, idx)
 
 #TODO  use cv.solvePnP or ICP
 
@@ -250,7 +259,7 @@ class pose_estimation:
             
             """ position mm2m """
             my_t = np.array(my_t*mm2m)
-            my_t[2] = dep
+            # my_t[2] = dep # use this to get depth of obj centroid
             # my_t[1] = my_t[1] + 0.05
             # my_t[0] = my_t[0] + 0.05
             
@@ -295,7 +304,10 @@ class pose_estimation:
             """ viz pred pose  """
             cv2.imshow("pose", cv2.cvtColor(viz, cv2.COLOR_BGR2RGB))
             cv2.moveWindow('pose', 0, 0)
-            
+        
+        else:
+            if len(bbox) <= 1:
+                print(f"{Fore.RED}unable to detect pose..{Style.RESET_ALL}")
         return viz
 
 
@@ -438,7 +450,7 @@ if __name__ == '__main__':
     objId = 0
     objlist =[1]
     mm2m = 0.001
-    iteration = 2
+    iteration = 3
     class_names = ['txonigiri']
 
     # cam @ aist
@@ -462,18 +474,18 @@ if __name__ == '__main__':
     dist = np.array([0.0, 0.0, 0.0, 0.0, 0.0])
     cam_mat = np.matrix([ [cam_fx, 0, cam_cx], [0, cam_fy, cam_cy], [0, 0, 1] ])
 
-    edge = 50.
+    edge = 70.
     edge = edge * mm2m
 
     edges  = np.array([
-                    [edge, -edge,  edge],
-                    [edge, -edge, -edge],
-                    [edge,  edge, -edge],
-                    [edge,  edge,  edge],
-                    [-edge,-edge,  edge],
-                    [-edge,-edge, -edge],
-                    [-edge, edge, -edge],
-                    [-edge, edge,  edge]])
+                    [edge, -edge*.5,  edge],
+                    [edge, -edge*.5, -edge],
+                    [edge,  edge*.5, -edge],
+                    [edge,  edge*.5,  edge],
+                    [-edge,-edge*.5,  edge],
+                    [-edge,-edge*.5, -edge],
+                    [-edge, edge*.5, -edge],
+                    [-edge, edge*.5,  edge]])
     
     # edges = np.array([ [-edge,-edge, edge], # 1
     #                    [-edge,-edge,-edge], # 2
@@ -544,5 +556,4 @@ if __name__ == '__main__':
     finally:
         pipeline.stop()
         cv2.destroyAllWindows()
-
 # %%
