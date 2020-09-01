@@ -289,7 +289,9 @@ class pose_estimation:
 
             """ introduce offset in Rot """
             Rx = rotation_matrix(2*m.pi/3, [1, 0, 0], my_t)
-            R = concatenate_matrices(Rx)[:3,:3]
+            Ry = rotation_matrix(10*m.pi/180, [0, 1, 0], my_t)
+            Rz = rotation_matrix(5*m.pi/180, [0, 0, 1], my_t)
+            R = concatenate_matrices(Rx, Ry, Rz)[:3,:3]
             mat_r = np.dot(mat_r.T, R[:3, :3])
             
             """ transform 3D box and axis with estimated pose and Draw """
