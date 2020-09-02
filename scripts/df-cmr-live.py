@@ -2,7 +2,6 @@
 import os
 import sys
 import cv2
-import glob
 import copy
 import time
 import getpass
@@ -12,10 +11,10 @@ import numpy as np
 import numpy.ma as ma 
 import matplotlib.pyplot as plt
 
-from colorama import Fore, Style
+import glob
 
-from PIL import Image
-from PIL import ImageDraw
+from colorama import Fore, Style
+from helperFunc import *
 
 import pyrealsense2 as rs
 
@@ -51,7 +50,7 @@ num_points = 500
 
 path = os.path.dirname(__file__)
 
-pretrained_model = os.path.join('txonigiri/', 'snapshot_model.npz')
+pretrained_model = os.path.join(path + '/../txonigiri/', 'snapshot_model.npz')
 # pretrained_model = os.path.join(path + '/txonigiri/', 'snapshot_model.npz')
 pooling_func = cmr.functions.roi_align_2d
 mask_rcnn = cmr.models.MaskRCNNResNet(
@@ -72,14 +71,14 @@ print('maskrcnn model loaded %s' % pretrained_model)
 
 pose = PoseNet(num_points, num_objects)
 pose.cuda()
-pose.load_state_dict(torch.load('txonigiri/pose_model.pth'))   
+pose.load_state_dict(torch.load(path + '/../txonigiri/pose_model.pth'))   
 # pose.load_state_dict(torch.load(path + '/txonigiri/pose_model.pth'))   
 pose.eval()
 print("pose_model loaded...")
 
 refiner = PoseRefineNet(num_points, num_objects)
 refiner.cuda()
-refiner.load_state_dict(torch.load('txonigiri/pose_refine_model.pth'))
+refiner.load_state_dict(torch.load(path + '/../txonigiri/pose_refine_model.pth'))
 # refiner.load_state_dict(torch.load(path + '/txonigiri/pose_refine_model.pth'))
 refiner.eval()
 print("pose_refine_model loaded...")
@@ -138,7 +137,7 @@ class pose_estimation:
 
         return (mask, bbox, viz)
 
-    def pose_refiner(self, my_t, my_r, points, emb, idx):
+    def pose_refiner(self, iteration, my_t, my_r, points, emb, idx):
         
         for ite in range(0, iteration):
             T = Variable(torch.from_numpy(my_t.astype(np.float32))).cuda().view(1, 3).repeat(num_points, 1).contiguous().view(1, num_points, 3)
@@ -168,8 +167,6 @@ class pose_estimation:
         return my_t, my_r
 
     def pose(self):
-        
-        my_result = []
         
         mask, bbox, viz = self.draw_seg(self.batch_predict())
         # cv2.imshow("mask", cv2.cvtColor(viz, cv2.COLOR_BGR2RGB)), cv2.moveWindow('mask', 0, 500) 
@@ -248,7 +245,7 @@ class pose_estimation:
             my_pred = np.append(my_r, my_t)
 
             # DF refiner ---results are better without refiner
-            # my_t, my_r = self.pose_refiner(my_t, my_r, points, emb, idx)
+            # my_t, my_r = self.pose_refiner(3, my_t, my_r, points, emb, idx)
 
 #TODO  use cv.solvePnP or ICP
 
@@ -280,7 +277,7 @@ class pose_estimation:
             # target_cam = np.add(edges, my_t)
             # new_image = cv2pil(viz)
             # g_draw = ImageDraw.Draw(new_image)
-            # p0, p7 = draw_cube(target_cam, viz, g_draw, (255, 165, 0))
+            # p0, p7 = draw_cube(target_cam, viz, g_draw, (255, 165, 0), cam_fx, cam_fy, cam_cx, cam_cy)
             # viz = pil2cv(new_image)
             # draw_axis(viz, np.eye(3), my_t, cam_mat)
             
@@ -294,12 +291,15 @@ class pose_estimation:
             R = concatenate_matrices(Rx, Ry, Rz)[:3,:3]
             mat_r = np.dot(mat_r.T, R[:3, :3])
             
+            
+            # h, status = cv2.findHomography(cloud, np.dot(points.cpu().numpy(), mat_r))
+
             """ transform 3D box and axis with estimated pose and Draw """
             target_df = np.dot(edges, mat_r)
-            target_df = np.add(target_df, my_t)            
+            target_df = np.add(target_df, my_t)
             new_image = cv2pil(viz)
             g_draw = ImageDraw.Draw(new_image)
-            _,_ = draw_cube(target_df, viz, g_draw, (255, 255, 255))
+            _,_ = draw_cube(target_df, viz, g_draw, (255, 255, 255), cam_fx, cam_fy, cam_cx, cam_cy)
             viz = pil2cv(new_image)
             draw_axis(viz, mat_r, my_t, cam_mat)
 
@@ -312,147 +312,15 @@ class pose_estimation:
                 print(f"{Fore.RED}unable to detect pose..{Style.RESET_ALL}")
         return viz
 
-
-def draw_axis(img, R, t, K):
-    # How+to+draw+3D+Coordinate+Axes+with+OpenCV+for+face+pose+estimation%3f
-    rotV, _ = cv2.Rodrigues(R)
-    points = np.float32([[.1, 0, 0], [0, .1, 0], [0, 0, .1], [0, 0, 0]]).reshape(-1, 3)
-    axisPoints, _ = cv2.projectPoints(points, rotV, t, K, (0, 0, 0, 0))
-    img = cv2.line(img, tuple(axisPoints[3].ravel()), tuple(axisPoints[0].ravel()), (255,0,0), 3)
-    img = cv2.line(img, tuple(axisPoints[3].ravel()), tuple(axisPoints[1].ravel()), (0,255,0), 3)
-    img = cv2.line(img, tuple(axisPoints[3].ravel()), tuple(axisPoints[2].ravel()), (0,0,255), 3)
-    return img
-
-def draw_cloudPts(img, imgpts, label):
-    color = [[254,0,0],[254,244,0],[171,242,0],[0,216,254],[1,0,254],[95,0,254],[254,0,221],[0,0,0],[153,56,0],[138,36,124],[107,153,0],[5,0,153],[76,76,76],[32,153,67],[41,20,240],[230,111,240],[211,222,6],[40,233,70],[130,24,70],[244,200,210],[70,80,90],[30,40,30]]
-    for point in imgpts:
-
-        img=cv2.circle(img,(int(point[0][0]),int(point[0][1])), 1, color[int(label)], -1)
-        # cv2.imshow('color', img)
-    return img 
-
-def pil2cv(image):
-    new_image = np.array(image, dtype=np.uint8)
-    new_image = cv2.cvtColor(new_image, cv2.COLOR_BGR2RGB)
-    return new_image
-
-def cv2pil(image):
-    new_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-    new_image = Image.fromarray(new_image)
-    return new_image
-
-""" adapted from DOPE """
-def DrawLine(g_draw, point1, point2, lineColor, lineWidth):
-    '''Draws line on image'''
-    if not point1 is None and point2 is not None:
-        g_draw.line([point1, point2], fill=lineColor, width=lineWidth)
-
-def DrawDot(g_draw, point, pointColor, pointRadius):
-    '''Draws dot (filled circle) on image'''
-    if point is not None:
-        xy = [
-            point[0] - pointRadius,
-            point[1] - pointRadius,
-            point[0] + pointRadius,
-            point[1] + pointRadius
-        ]
-        g_draw.ellipse(xy,
-                       fill=pointColor,
-                       outline=pointColor
-                       )
-
-def draw_cube(tar, img, g_draw, color):
-    # pinhole camera model/ project the cubeoid on the image plane using camera intrinsics
-    # u = fx * x/z + cx
-    # v = fy * y/z + cy
-    # https://docs.opencv.org/master/d9/d0c/group__calib3d.html#ga50620f0e26e02caa2e9adc07b5fbf24e
-    p0 = (int((tar[0][0]/ tar[0][2])*cam_fx + cam_cx),  int((tar[0][1]/ tar[0][2])*cam_fy + cam_cy))
-    p1 = (int((tar[1][0]/ tar[1][2])*cam_fx + cam_cx),  int((tar[1][1]/ tar[1][2])*cam_fy + cam_cy))
-    p2 = (int((tar[2][0]/ tar[2][2])*cam_fx + cam_cx),  int((tar[2][1]/ tar[2][2])*cam_fy + cam_cy))
-    p3 = (int((tar[3][0]/ tar[3][2])*cam_fx + cam_cx),  int((tar[3][1]/ tar[3][2])*cam_fy + cam_cy))
-    p4 = (int((tar[4][0]/ tar[4][2])*cam_fx + cam_cx),  int((tar[4][1]/ tar[4][2])*cam_fy + cam_cy))
-    p5 = (int((tar[5][0]/ tar[5][2])*cam_fx + cam_cx),  int((tar[5][1]/ tar[5][2])*cam_fy + cam_cy))
-    p6 = (int((tar[6][0]/ tar[6][2])*cam_fx + cam_cx),  int((tar[6][1]/ tar[6][2])*cam_fy + cam_cy))
-    p7 = (int((tar[7][0]/ tar[7][2])*cam_fx + cam_cx),  int((tar[7][1]/ tar[7][2])*cam_fy + cam_cy))
-    
-    points = []
-    points.append(tuple(p0))
-    points.append(tuple(p1))
-    points.append(tuple(p2))
-    points.append(tuple(p3))
-    points.append(tuple(p4))
-    points.append(tuple(p5))
-    points.append(tuple(p6))
-    points.append(tuple(p7))
-
-    '''
-    Draws cube with a thick solid line across
-    the front top edge and an X on the top face.
-    '''
-    lineWidthForDrawing = 2
-
-    # draw front
-    DrawLine(g_draw, points[0], points[1], color, lineWidthForDrawing)
-    DrawLine(g_draw, points[1], points[2], color, lineWidthForDrawing)
-    DrawLine(g_draw, points[3], points[2], color, lineWidthForDrawing)
-    DrawLine(g_draw, points[3], points[0], color, lineWidthForDrawing)
-
-    # draw back
-    DrawLine(g_draw, points[4], points[5], color, lineWidthForDrawing)
-    DrawLine(g_draw, points[6], points[5], color, lineWidthForDrawing)
-    DrawLine(g_draw, points[6], points[7], color, lineWidthForDrawing)
-    DrawLine(g_draw, points[4], points[7], color, lineWidthForDrawing)
-
-    # draw sides
-    DrawLine(g_draw, points[0], points[4], color, lineWidthForDrawing)
-    DrawLine(g_draw, points[7], points[3], color, lineWidthForDrawing)
-    DrawLine(g_draw, points[5], points[1], color, lineWidthForDrawing)
-    DrawLine(g_draw, points[2], points[6], color, lineWidthForDrawing)
-
-    # draw dots
-    DrawDot(g_draw, points[0], pointColor=(0,101,255), pointRadius=4)
-    DrawDot(g_draw, points[1], pointColor=(232,12,217), pointRadius=4)
-
-    # draw x on the top
-    DrawLine(g_draw, points[0], points[5], color, lineWidthForDrawing)
-    DrawLine(g_draw, points[1], points[4], color, lineWidthForDrawing)
-
-
-    r = 255 # int(np.random.choice(range(255)))
-    g = 255 # int(np.random.choice(range(255)))
-    b = 255 # int(np.random.choice(range(255)))
-
-    # cv2.line(img, p0, p1, (0,0,b), 2)
-    # cv2.line(img, p0, p3, (r,0,0), 2)
-    # cv2.line(img, p0, p4, (0,g,0), 2)
-    
-    # cv2.line(img, p0, p1, color, 2)
-    # cv2.line(img, p0, p3, color, 2)
-    # cv2.line(img, p0, p4, color, 2)
-    # cv2.line(img, p1, p2, color, 2)
-    # cv2.line(img, p1, p5, color, 2)
-    # cv2.line(img, p2, p3, color, 2)
-    # cv2.line(img, p2, p6, color, 2)
-    # cv2.line(img, p3, p7, color, 2)
-    # cv2.line(img, p4, p5, color, 2)
-    # cv2.line(img, p4, p7, color, 2)
-    # cv2.line(img, p5, p6, color, 2)
-    # cv2.line(img, p6, p7, color, 2)
-
-    # print(p0, p1, p2, p3, p4, p5, p6, p7)
-    # cv2.rectangle(img, p0, p7, (0,0,255))
-
-    return p0, p7
    
 if __name__ == '__main__':
     
-    autostop = 100
+    autostop = 1000
     
     bs = 1
     objId = 0
     objlist =[1]
     mm2m = 0.001
-    iteration = 3
     class_names = ['txonigiri']
 
     # cam @ aist
@@ -460,18 +328,6 @@ if __name__ == '__main__':
     cam_cx = 320.075
     cam_fy = 605.699
     cam_cy = 247.877
-
-    # cam depth @ aist
-    # cam_cx = 160.037
-    # cam_cy = 123.938
-    # cam_fx = 302.643
-    # cam_fy = 302.85
-
-    # cam @ tx
-    # cam_fx = 611.586
-    # cam_cx = 324.002
-    # cam_fy = 611.837
-    # cam_cy = 235.856
 
     dist = np.array([0.0, 0.0, 0.0, 0.0, 0.0])
     cam_mat = np.matrix([ [cam_fx, 0, cam_cx], [0, cam_fy, cam_cy], [0, 0, 1] ])
@@ -488,17 +344,6 @@ if __name__ == '__main__':
                     [-edge,-edge*.5, -edge],
                     [-edge, edge*.5, -edge],
                     [-edge, edge*.5,  edge]])
-    
-    # edges = np.array([ [-edge,-edge, edge], # 1
-    #                    [-edge,-edge,-edge], # 2
-    #                    [ edge,-edge,-edge], # 3
-    #                    [ edge,-edge, edge], # 4
-    #                    [-edge, edge, edge], # 5
-    #                    [-edge, edge,-edge], # 6
-    #                    [ edge, edge,-edge], # 7
-    #                    [ edge, edge, edge], # 8
-    #                 ])
-    
 
     # Stream (Color/Depth) settings
     config = rs.config()

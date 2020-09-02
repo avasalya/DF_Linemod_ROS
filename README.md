@@ -5,7 +5,7 @@ densefusion with ros using format of linemod on custom dataset
 https://github.com/hygxy/ma_densefusion 
 
 # to test with ROS
-$ roslaunch realsense2_camera rs_rgbd.launch 
+$ roslaunch realsense2_camera rs_rgbd.launch align_depth:=true
 
 $ rosrun densefusion_ros densefusion_ros.py --model=txonigiri
 
@@ -15,7 +15,7 @@ $ ./eval.sh
 
 or 
 
-$ python3 df-cmr-ros.py
+$ python3 densefusion_ros.py
 
 # to test with realsense2_camera
 $ python3 df-cmr-live.py

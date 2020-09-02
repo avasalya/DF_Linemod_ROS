@@ -5,6 +5,7 @@ __pycache__/
 
 #folders
 seg_result/
+old-scripts/out/
 
 # C extensions
 *.so
