@@ -9,16 +9,12 @@ $ roslaunch realsense2_camera rs_rgbd.launch align_depth:=true
 
 $ rosrun densefusion_ros densefusion_ros.py --model=txonigiri
 
-or just run from scripts/
+or just run from mainDir $ ./scripts/eval.sh
 
-$ ./eval.sh
-
-or 
-
-$ python3 densefusion_ros.py
+or $ python3 densefusion_ros.py
 
 # to test with realsense2_camera
-$ python3 df-cmr-live.py
+$ python3 densefusion_cam.py
 
 # to test with rgbd images
-$ python3 df-cmr-eval.py
+$ python3 densefusion_img.py
