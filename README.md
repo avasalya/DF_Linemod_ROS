@@ -9,7 +9,7 @@ $ roslaunch realsense2_camera rs_rgbd.launch align_depth:=true
 
 $ rosrun densefusion_ros densefusion_ros.py --model=txonigiri
 
-or just run from main dir
+or just run from scripts/
 
 $ ./eval.sh
 
