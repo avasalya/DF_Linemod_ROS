@@ -98,12 +98,15 @@ class pose_estimation:
     def __init__(self, mask_rcnn, pose, refiner, object_index_):
         
         self.depth_sub = message_filters.Subscriber('/camera/aligned_depth_to_color/image_raw', Image)
+        depth_cache = message_filters.Cache(self.depth_sub, 100)
+
         self.rgb_sub = message_filters.Subscriber('/camera/color/image_raw', Image)
+        rgb_cache = message_filters.Cache(self.rgb_sub, 100)
         
-        ts = message_filters.ApproximateTimeSynchronizer([self.rgb_sub, self.depth_sub], 30, 1)
+        ts = message_filters.ApproximateTimeSynchronizer([self.rgb_sub, self.depth_sub], 30, .5)
         # ts = message_filters.TimeSynchronizer([self.rgb_sub, self.depth_sub], 30)
         ts.registerCallback(self.callback)
-
+        
         self.mask_rcnn = mask_rcnn
         self.estimator = pose
         self.refiner = refiner
@@ -176,9 +179,9 @@ class pose_estimation:
         return my_t, my_r
 
     def callback(self, rgb, depth):
-
+    
         t1 = time.time()
-
+    
         # print ('received depth image of type: ' +depth.encoding)
         # print ('received rgb image of type: ' + rgb.encoding)
             
@@ -281,7 +284,7 @@ class pose_estimation:
             
             """ position mm2m """
             my_t = np.array(my_t*mm2m)
-            # my_t[2] = dep # use this to get depth of obj centroid
+            my_t[2] = dep # use this to get depth of obj centroid
             # my_t[1] = my_t[1] + 0.05
             # my_t[0] = my_t[0] + 0.05
             
@@ -335,9 +338,6 @@ class pose_estimation:
         else:
             if len(bbox) <= 1:
                 print(f"{Fore.RED}unable to detect pose..{Style.RESET_ALL}")
-            
-        return viz
-
 
 if __name__ == '__main__':
     
@@ -356,7 +356,7 @@ if __name__ == '__main__':
     dist = np.array([0.0, 0.0, 0.0, 0.0, 0.0])
     cam_mat = np.matrix([ [cam_fx, 0, cam_cx], [0, cam_fy, cam_cy], [0, 0, 1] ])
 
-    edge = 70.
+    edge = 60.
     edge = edge * mm2m
 
     edges  = np.array([
@@ -377,14 +377,12 @@ if __name__ == '__main__':
     rospy.loginfo('streaming now...')
     pe = pose_estimation(mask_rcnn, pose, refiner, objId) 
 
-    rospy.spin()
-    rate = rospy.Rate(30)
-    while not rospy.is_shutdown():
-        # pubColor.send_msg()
-        # pubDepth.send_msg()
-        rate.sleep()
-
-    # except KeyboardInterrupt:
-    #     print ('Shutting down ROS pose estimation module')
-    # cv2.destroyAllWindows()
+    try:
+        rospy.spin()
+        rate = rospy.Rate(30)
+        while not rospy.is_shutdown():
+            rate.sleep()
+    except KeyboardInterrupt:
+        print ('Shutting down ROS pose estimation module')
+        cv2.destroyAllWindows()
     
