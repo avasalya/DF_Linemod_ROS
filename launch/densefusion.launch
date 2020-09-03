@@ -1,6 +1,6 @@
 <launch>
  		<!-- 3d model file of object -->
-    	<arg name="cad_file" default="$(find densefusion_ros)/txonigiri/txonigiri.ply" />
+    	<arg name="ply_model" default="$(find densefusion_ros)/txonigiri/obj_01.ply" />
 
 		<arg name="gui" default="true" />
 		<param name="use_gui" value="$(arg gui)"/>
@@ -11,8 +11,15 @@
 		<arg name="point_cloud_height" default="480" />
 		<arg name="point_cloud_width" default="640" />
 
-		<node name="onigiriPoseNode" pkg="densefusion_ros" type="densefusion_ros.py" output="screen">
-			<param name="cad_file" type="str" value="$(arg cad_file)" />
+		<arg name="voxel_size" default="0.1" />
+		<arg name="scale" default="100" />
+		<arg name="translation" default="0 0 -3" />
+		<arg name="rotation" default="0 0 0.7071068 0.7071068" />
+
+		<node name="onigiriPoseNode" pkg="densefusion_ros" type="densefusion_ros.py" output="screen"
+			args="$(arg ply_model) $(arg voxel_size) $(arg scale) $(arg translation) $(arg rotation)">
+
+			<!-- <param name="ply_model" type="str" value="$(arg ply_model)" /> -->
 			<param name="point_cloud_height" type="int" value="$(arg point_cloud_height)" />
 			<param name="point_cloud_width" type="int" value="$(arg point_cloud_width)" />
 		</node>
