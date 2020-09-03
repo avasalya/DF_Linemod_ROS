@@ -97,6 +97,7 @@ cam_cy = 247.877
 dist = np.array([0.0, 0.0, 0.0, 0.0, 0.0])
 cam_mat = np.matrix([ [cam_fx, 0, cam_cx], [0, cam_fy, cam_cy], [0, 0, 1] ])
 
+
 edge = 60.
 edge = edge * mm2m
 
@@ -223,7 +224,7 @@ class DenseFusion:
         # cv2.imshow("rgb", cv2.cvtColor(viz, cv2.COLOR_BGR2RGB)), cv2.waitKey(1)
 
         t2 = time.time()
-        print(f'{Fore.YELLOW}mask-rcnn inference time is:', t2 - t1)
+        print(f'{Fore.YELLOW}mask-rcnn inference time is:{Style.RESET_ALL}', t2 - t1)
 
         pred = mask
         pred = pred *255
@@ -375,20 +376,14 @@ def posePublisher(viz, objs_pose):
             cv2.imshow("pose", cv2.cvtColor(viz, cv2.COLOR_BGR2RGB))
             cv2.waitKey(1), cv2.moveWindow('pose', 0, 0)
 
-            # # http://wiki.ros.org/rospy_tutorials/Tutorials/WritingImagePublisherSubscriber
-            # pub_viz_pos = rospy.Publisher('/vizOnigiriPos', Image, queue_size = 10)
-            # msg = CompressedImage()
-            # msg.header.stamp = rospy.Time.now()
-            # msg.format = "jpg"
-            # msg.data = np.array(cv2.imencode('.jpg', viz)[1]).tostring()
-            # pub_viz_pos.publish(msg)
-
         """ publish pos to ros-msg """
         poses = objs_pose
         pose2msg = Pose()
         pose_array = PoseArray()
-        pose_pub = rospy.Publisher('/onigirPos', PoseArray,queue_size = 10)
-
+        pose_array.header.stamp = rospy.Time.now()
+        pose_array.header.frame_id = "camera_color_optical_frame"
+        pose_pub = rospy.Publisher('/onigiriPose', PoseArray,queue_size = 10)
+        
         if len(poses) > 0:
 
             print("total onigiri(s) found", len(poses))
@@ -409,7 +404,7 @@ def posePublisher(viz, objs_pose):
 
 def main():
     
-    rospy.init_node('txonigiri_pose')
+    rospy.init_node('onigiriPoseNode', anonymous=False)
     rospy.loginfo('streaming now...')
     
     """ run DenseFusion """
@@ -421,4 +416,4 @@ def main():
         rate.sleep()
         
 if __name__ == '__main__':
-    main()
+    main()    

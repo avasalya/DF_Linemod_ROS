@@ -19,16 +19,17 @@
 * https://www.dropbox.com/sh/wkmqd0w1tvo4592/AADWt9j5SjiklJ5X0dpsSILAa?dl=0
 
 # with ROS
-### launch camera
+### 1. launch camera
 * `roslaunch realsense2_camera rs_rgbd.launch align_depth:=true`
 
-### start publisher/subscriber services
-* `rosrun densefusion_ros densefusion_ros.py`
-    * #### also possible from directory
-      `./scripts/eval.sh` or `python3 densefusion_ros.py`
+### 2. launch rviz along with publisher/subscriber services
+* `roslaunch densefusion_ros densefusion.launch`
 
-### launch rviz
-* `rosrun densefusion_ros default.launch`
+* #### also possible via
+  * `rosrun densefusion_ros densefusion_ros.py` or
+  * `./scripts/eval.sh` or 
+  * `python3 densefusion_ros.py`
+
 
 
 # without ROS
