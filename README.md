@@ -1,9 +1,9 @@
 # DF_Linemod_ROS
-**densefusion with ros using format of linemod on custom dataset with chainer mask-rcnn for segmentation**
-* tested on Ubuntu 18.04, ROS Melodic, RTX 2080-Ti, CUDA 10.1, Python3.6.9
+**densefusion with ros using linemod format on custom dataset with chainer mask-rcnn for segmentation**
+* tested on Ubuntu 18.04, ROS Melodic, RTX 2080-Ti, CUDA 10.1, Python3.6.9, PyTorch 1.5.1
 * refer `environment.yml` for other anaconda packages
 
-## Adapted from
+## adapted from
 * https://github.com/j96w/DenseFusion
 * https://github.com/hygxy/ma_densefusion
 * https://github.com/wkentaro/chainer-mask-rcnn
@@ -11,7 +11,14 @@
 ## create conda environment
 `conda env create -f environment.yml`
 
-## 1. Test with ROS
+## install realsense ROS package
+* https://github.com/IntelRealSense/realsense-ros
+
+## download weights and model files to `txonigiri` folder
+* https://www.dropbox.com/sh/wkmqd0w1tvo4592/AADWt9j5SjiklJ5X0dpsSILAa?dl=0
+
+# with ROS
+## Run
 * `roslaunch realsense2_camera rs_rgbd.launch align_depth:=true`
 
 * `rosrun densefusion_ros default.launch`
@@ -20,8 +27,9 @@
     * #### also possible from directory
       `./scripts/eval.sh` or `python3 densefusion_ros.py`
 
-## 2. Test with realsense2_camera
+# without ROS
+## Test with realsense D435
 `python3 densefusion_cam.py`
 
-## 3. Test with rgbd images
+## Test with rgbd images
 `python3 densefusion_img.py`

@@ -26,6 +26,7 @@ from helperFunc import *
 
 import message_filters
 from sensor_msgs.msg import Image
+from geometry_msgs.msg import Pose, PoseArray
 
 import chainer
 import chainer.utils as utils
@@ -96,6 +97,9 @@ print("pose_refine_model loaded...")
 class pose_estimation:
     
     def __init__(self, mask_rcnn, pose, refiner, object_index_):
+        
+        self.viz = None
+        self.objs_pose = None
         
         self.depth_sub = message_filters.Subscriber('/camera/aligned_depth_to_color/image_raw', Image)
         depth_cache = message_filters.Cache(self.depth_sub, 100)
@@ -181,6 +185,7 @@ class pose_estimation:
     def callback(self, rgb, depth):
     
         t1 = time.time()
+        obj_pose = []
     
         # print ('received depth image of type: ' +depth.encoding)
         # print ('received rgb image of type: ' + rgb.encoding)
@@ -328,16 +333,46 @@ class pose_estimation:
             viz = pil2cv(new_image)
             draw_axis(viz, mat_r, my_t, cam_mat)
 
-            """ viz pred pose  """
-            cv2.imshow("pose", cv2.cvtColor(viz, cv2.COLOR_BGR2RGB)), cv2.waitKey(1)
-            cv2.moveWindow('pose', 0, 0)
-        
-            t2 = time.time()
-            print('inference time is :{0}'.format(t2 - t1))
+            """ publish pose and image with boxes """
+            I = np.identity(4)
+            I[0:3, 0:3] = mat_r
+            I[0:3, -1] = my_t 
+            rot = quaternion_from_matrix(I, True)
+            my_t = my_t.reshape(1,3)
+            pose = {
+                    'tx':my_t[0][0],
+                    'ty':my_t[0][1],
+                    'tz':my_t[0][2],
+                    'qx':rot[0],
+                    'qy':rot[1],
+                    'qz':rot[2],
+                    'qw':rot[3]}
 
+            obj_pose.append(pose)
+            self.viz = viz
         else:
             if len(bbox) <= 1:
                 print(f"{Fore.RED}unable to detect pose..{Style.RESET_ALL}")
+
+        self.objs_pose = obj_pose
+        # print("total objects found", len(self.objs_pose))
+        # print("0", self.objs_pose[0])
+        # print("1", self.objs_pose[1])
+
+        """ viz pred pose  """
+        cv2.imshow("pose", cv2.cvtColor(self.viz, cv2.COLOR_BGR2RGB))
+        cv2.waitKey(1), cv2.moveWindow('pose', 0, 0)
+
+        t2 = time.time()
+        print('inference time is :{0}'.format(t2 - t1))
+
+    def publishPose(self):
+        
+        viz = self.viz
+        poses = self.objs_pose
+        
+        return viz, poses
+
 
 if __name__ == '__main__':
     
@@ -375,7 +410,12 @@ if __name__ == '__main__':
     
     rospy.init_node('txonigiri_pose')
     rospy.loginfo('streaming now...')
-    pe = pose_estimation(mask_rcnn, pose, refiner, objId) 
+        
+    pe = pose_estimation(mask_rcnn, pose, refiner, objId)
+    # viz, poses = pe.publishPose()
+    # print("total objects found", len(poses))
+    # print("0", pose[0])
+    # print("1", pose[1])
 
     try:
         rospy.spin()

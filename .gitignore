@@ -68,7 +68,14 @@ local_settings.py
 db.sqlite3
 db.sqlite3-journal
 
-txonigiri/
+#torch
+*.pth
+
+# chainer
+*.npz
+
+# model
+*.ply
 
 # Flask stuff:
 instance/
