@@ -1,11 +1,4 @@
-#!/usr/bin/env python
-'''
-This ros node subscribes to two camera topics: '/camera/color/image_raw' and 
-'/camera/aligned_depth_to_color/image_raw' in a synchronized way. It then runs 
-mask-rcnn and pose estimation with trained models using DenseFusion
-(https://github.com/j96w/DenseFusion). The whole code structure is adapted from: 
-(http://wiki.ros.org/rospy_tutorials/Tutorials/WritingImagePublisherSubscriber)
-'''
+#! /usr/bin/env python3
 
 import os
 import sys
@@ -13,7 +6,6 @@ import cv2
 import copy
 import time 
 import getpass
-import argparse
 import math as m
 import numpy as np
 import numpy.ma as ma 
@@ -25,8 +17,9 @@ from colorama import Fore, Style
 from helperFunc import *
 
 import message_filters
-from sensor_msgs.msg import Image
+from sensor_msgs.msg import Image, CompressedImage
 from geometry_msgs.msg import Pose, PoseArray
+
 
 import chainer
 import chainer.utils as utils
@@ -39,10 +32,8 @@ from torch.autograd import Variable
 
 from lib.loss import Loss
 from lib.loss_refiner import Loss_refine
-from lib.knn.__init__ import KNearestNeighbor
 from lib.network import PoseNet, PoseRefineNet
 from lib.transformations import quaternion_matrix, quaternion_from_matrix, rotation_matrix, concatenate_matrices, is_same_transform, is_same_quaternion, rotation_from_matrix
-
 
 # clean terminal in the beginning
 username = getpass.getuser()
@@ -58,8 +49,6 @@ os.environ["CUDA_VISIBLE_DEVICES"]="0" # "0,1,2,3"
 
 num_objects = 1
 num_points = 500
-
-knn = KNearestNeighbor(1)
 
 path = os.path.dirname(__file__)
 
@@ -79,7 +68,7 @@ mask_rcnn = cmr.models.MaskRCNNResNet(
 
 chainer.cuda.get_device_from_id(0).use()
 mask_rcnn.to_gpu()
-print('maskrcnn model loaded %s' % pretrained_model)
+print('maskrcnn model loaded...')
 
 pose = PoseNet(num_points, num_objects)
 pose.cuda()
@@ -93,24 +82,52 @@ refiner.load_state_dict(torch.load(path + '/../txonigiri/pose_refine_model.pth')
 refiner.eval()
 print("pose_refine_model loaded...")
 
+bs = 1
+objId = 0
+objlist =[1]
+mm2m = 0.001
+class_names = ['txonigiri']
 
-class pose_estimation:
+# cam @ aist
+cam_fx = 605.286
+cam_cx = 320.075
+cam_fy = 605.699
+cam_cy = 247.877
+
+dist = np.array([0.0, 0.0, 0.0, 0.0, 0.0])
+cam_mat = np.matrix([ [cam_fx, 0, cam_cx], [0, cam_fy, cam_cy], [0, 0, 1] ])
+
+edge = 60.
+edge = edge * mm2m
+
+edges  = np.array([
+                [edge, -edge*.5,  edge],
+                [edge, -edge*.5, -edge],
+                [edge,  edge*.5, -edge],
+                [edge,  edge*.5,  edge],
+                [-edge,-edge*.5,  edge],
+                [-edge,-edge*.5, -edge],
+                [-edge, edge*.5, -edge],
+                [-edge, edge*.5,  edge]])
+
+class DenseFusion:
     
     def __init__(self, mask_rcnn, pose, refiner, object_index_):
-        
-        self.viz = None
-        self.objs_pose = None
-        
-        self.depth_sub = message_filters.Subscriber('/camera/aligned_depth_to_color/image_raw', Image)
-        depth_cache = message_filters.Cache(self.depth_sub, 100)
 
-        self.rgb_sub = message_filters.Subscriber('/camera/color/image_raw', Image)
-        rgb_cache = message_filters.Cache(self.rgb_sub, 100)
-        
-        ts = message_filters.ApproximateTimeSynchronizer([self.rgb_sub, self.depth_sub], 30, .5)
-        # ts = message_filters.TimeSynchronizer([self.rgb_sub, self.depth_sub], 30)
-        ts.registerCallback(self.callback)
-        
+        rgb_sub = message_filters.Subscriber('/camera/color/image_raw', Image)
+        depth_sub = message_filters.Subscriber('/camera/aligned_depth_to_color/image_raw', Image)
+        depth_cache = message_filters.Cache(depth_sub, 100)
+        rgb_cache = message_filters.Cache(rgb_sub, 100)
+
+        self.ts = message_filters.ApproximateTimeSynchronizer([rgb_sub, depth_sub], 30, .5)
+        # self.ts = message_filters.TimeSynchronizer([rgb_sub, depth_sub], 30)
+        self.ts.registerCallback(self.callback)
+
+        self.cv_image = np.zeros((480, 640, 3), np.uint8)
+        self.cv_depth = np.zeros((480, 640, 1), np.uint8)
+        self.viz = np.zeros((480, 640, 3), np.uint8)
+        self.objs_pose = None
+
         self.mask_rcnn = mask_rcnn
         self.estimator = pose
         self.refiner = refiner
@@ -118,8 +135,21 @@ class pose_estimation:
 
         self.xmap = np.array([[j for i in range(640)] for j in range(480)]) 
         self.ymap = np.array([[i for i in range(640)] for j in range(480)])
-    
-        print('subscribed to rgb and depth topic in a sychronized way')
+
+    def callback(self, rgb, depth):
+
+        # print ('received depth image of type: ' + depth.encoding)
+        # print ('received rgb image of type: ' + rgb.encoding)
+        
+        #https://answers.ros.org/question/64318/how-do-i-convert-an-ros-image-into-a-numpy-array/
+        depth = np.frombuffer(depth.data, dtype=np.uint16).reshape(depth.height, depth.width, -1)
+        rgb = np.frombuffer(rgb.data, dtype=np.uint8).reshape(rgb.height, rgb.width, -1)
+        
+        """ estimate pose """
+        self.pose_estimator(rgb, depth)
+        
+        """ publish pose to ros """
+        posePublisher(self.viz, self.objs_pose)
 
     def batch_predict(self):
 
@@ -147,9 +177,7 @@ class pose_estimation:
                 # print(caption)
             
             viz = cmr.utils.draw_instance_bboxes(img=rgb, bboxes=bbox, labels=label + 1, n_class=len(class_names) + 1, captions=captions, masks=mask)
-
-            # plt.imsave('seg_result/out/frame.png', viz)
-            # plt.imshow(viz.copy()), plt.show()
+            # cv2.imshow("mask-rcnn", viz), cv2.waitKey(1)
 
         return (mask, bbox, viz)
 
@@ -182,33 +210,26 @@ class pose_estimation:
         
         return my_t, my_r
 
-    def callback(self, rgb, depth):
+    def pose_estimator(self, rgb, depth):
     
         t1 = time.time()
         obj_pose = []
-    
-        # print ('received depth image of type: ' +depth.encoding)
-        # print ('received rgb image of type: ' + rgb.encoding)
-            
-        #https://answers.ros.org/question/64318/how-do-i-convert-an-ros-image-into-a-numpy-array/
-        depth = np.frombuffer(depth.data, dtype=np.uint16).reshape(depth.height, depth.width, -1)
-        rgb = np.frombuffer(rgb.data, dtype=np.uint8).reshape(rgb.height, rgb.width, -1)
-
-        # depth= np.asanyarray(depth.data)
-        # rgb = np.asanyarray(rgb.data)
-
+        print(f"{Fore.GREEN}estimating pose..{Style.RESET_ALL}")
+        
         self.rgb_s = []
         rgb_s = np.transpose(rgb, (2, 0, 1))
         self.rgb_s.append(rgb_s)
         mask, bbox, viz = self.draw_seg(self.batch_predict())
         # cv2.imshow("rgb", cv2.cvtColor(viz, cv2.COLOR_BGR2RGB)), cv2.waitKey(1)
 
+        t2 = time.time()
+        print(f'{Fore.YELLOW}mask-rcnn inference time is:', t2 - t1)
+
         pred = mask
         pred = pred *255
         pred = np.transpose(pred, (1, 2, 0)) # (CxHxW)->(HxWxC)
 
         # convert img into tensor
-        # rgb = rgb
         rgb_original = np.transpose(rgb, (2, 0, 1))
         norm = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         rgb = Variable(norm(torch.from_numpy(rgb.astype(np.float32)))).cuda()        
@@ -270,7 +291,6 @@ class pose_estimation:
             pred_c = pred_c.view(bs, num_points)
             how_max, which_max = torch.max(pred_c, 1) #1
             pred_t = pred_t.view(bs * num_points, 1, 3)
-
             # print("max confidence", how_max)
 
             my_r = pred_r[0][which_max[0]].view(-1).cpu().data.numpy()
@@ -290,10 +310,7 @@ class pose_estimation:
             """ position mm2m """
             my_t = np.array(my_t*mm2m)
             my_t[2] = dep # use this to get depth of obj centroid
-            # my_t[1] = my_t[1] + 0.05
-            # my_t[0] = my_t[0] + 0.05
-            
-            print("Pos xyz:{0}".format(my_t))
+            # print("Pos xyz:{0}".format(my_t))
 
             """ rotation """
             mat_r = quaternion_matrix(my_r)[:3, :3]
@@ -305,17 +322,6 @@ class pose_estimation:
 
             """ draw cmr 2D box """
             cv2.rectangle(viz, (cmax, cmin), (rmax, rmin), (255,0,0))
-
-            """ add estimated position and Draw 3D box, axis """
-            # target_cam = np.add(edges, my_t)
-            # new_image = cv2pil(viz)
-            # g_draw = ImageDraw.Draw(new_image)
-            # p0, p7 = draw_cube(target_cam, viz, g_draw, (255, 165, 0), cam_fx, cam_fy, cam_cx, cam_cy)
-            # viz = pil2cv(new_image)
-            # draw_axis(viz, np.eye(3), my_t, cam_mat)
-            
-            """ align 2d bbox with 3D box face """
-            # cv2.rectangle(viz, p0, p7, (0,0,255))
 
             """ introduce offset in Rot """
             Rx = rotation_matrix(2*m.pi/3, [1, 0, 0], my_t)
@@ -333,7 +339,7 @@ class pose_estimation:
             viz = pil2cv(new_image)
             draw_axis(viz, mat_r, my_t, cam_mat)
 
-            """ publish pose and image with boxes """
+            """ convert pose to ros-msg """
             I = np.identity(4)
             I[0:3, 0:3] = mat_r
             I[0:3, -1] = my_t 
@@ -355,74 +361,64 @@ class pose_estimation:
                 print(f"{Fore.RED}unable to detect pose..{Style.RESET_ALL}")
 
         self.objs_pose = obj_pose
-        # print("total objects found", len(self.objs_pose))
-        # print("0", self.objs_pose[0])
-        # print("1", self.objs_pose[1])
 
-        """ viz pred pose  """
-        cv2.imshow("pose", cv2.cvtColor(self.viz, cv2.COLOR_BGR2RGB))
-        cv2.waitKey(1), cv2.moveWindow('pose', 0, 0)
+        # cv2.imshow("pose", cv2.cvtColor(self.viz, cv2.COLOR_BGR2RGB))
+        # cv2.waitKey(1), cv2.moveWindow('pose', 0, 0)
+        t3 = time.time()
+        print(f'{Fore.YELLOW}DenseFusion inference time is:{Style.RESET_ALL}', t3 - t2)
 
-        t2 = time.time()
-        print('inference time is :{0}'.format(t2 - t1))
 
-    def publishPose(self):
+def posePublisher(viz, objs_pose):
         
-        viz = self.viz
-        poses = self.objs_pose
-        
-        return viz, poses
+        """ publish/visualize pose """
+        if viz is not None:
+            cv2.imshow("pose", cv2.cvtColor(viz, cv2.COLOR_BGR2RGB))
+            cv2.waitKey(1), cv2.moveWindow('pose', 0, 0)
+
+            # # http://wiki.ros.org/rospy_tutorials/Tutorials/WritingImagePublisherSubscriber
+            # pub_viz_pos = rospy.Publisher('/vizOnigiriPos', Image, queue_size = 10)
+            # msg = CompressedImage()
+            # msg.header.stamp = rospy.Time.now()
+            # msg.format = "jpg"
+            # msg.data = np.array(cv2.imencode('.jpg', viz)[1]).tostring()
+            # pub_viz_pos.publish(msg)
+
+        """ publish pos to ros-msg """
+        poses = objs_pose
+        pose2msg = Pose()
+        pose_array = PoseArray()
+        pose_pub = rospy.Publisher('/onigirPos', PoseArray,queue_size = 10)
+
+        if len(poses) > 0:
+
+            print("total onigiri(s) found", len(poses))
+            for p in range(len(poses)):
+                print(str(p), poses[p])            
+                pose2msg.position.x = poses[p]['tx']
+                pose2msg.position.y = poses[p]['ty']
+                pose2msg.position.z = poses[p]['tz']
+                pose2msg.orientation.x = poses[p]['qx']
+                pose2msg.orientation.y = poses[p]['qy']
+                pose2msg.orientation.z = poses[p]['qz']
+                pose2msg.orientation.w = poses[p]['qw']
+                pose_array.poses.append(pose2msg)
+            pose_pub.publish(pose_array)
+        else:
+            print(f"{Fore.YELLOW}no onigiri detected{Style.RESET_ALL}")
 
 
-if __name__ == '__main__':
-    
-    bs = 1
-    objId = 0
-    objlist =[1]
-    mm2m = 0.001
-    class_names = ['txonigiri']
-
-    # cam @ aist
-    cam_fx = 605.286
-    cam_cx = 320.075
-    cam_fy = 605.699
-    cam_cy = 247.877
-
-    dist = np.array([0.0, 0.0, 0.0, 0.0, 0.0])
-    cam_mat = np.matrix([ [cam_fx, 0, cam_cx], [0, cam_fy, cam_cy], [0, 0, 1] ])
-
-    edge = 60.
-    edge = edge * mm2m
-
-    edges  = np.array([
-                    [edge, -edge*.5,  edge],
-                    [edge, -edge*.5, -edge],
-                    [edge,  edge*.5, -edge],
-                    [edge,  edge*.5,  edge],
-                    [-edge,-edge*.5,  edge],
-                    [-edge,-edge*.5, -edge],
-                    [-edge, edge*.5, -edge],
-                    [-edge, edge*.5,  edge]])
-
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--model', type=str, default='txonigiri', help='object name --> txonigiri')
-    opt = parser.parse_args()
+def main():
     
     rospy.init_node('txonigiri_pose')
     rospy.loginfo('streaming now...')
-        
-    pe = pose_estimation(mask_rcnn, pose, refiner, objId)
-    # viz, poses = pe.publishPose()
-    # print("total objects found", len(poses))
-    # print("0", pose[0])
-    # print("1", pose[1])
-
-    try:
-        rospy.spin()
-        rate = rospy.Rate(30)
-        while not rospy.is_shutdown():
-            rate.sleep()
-    except KeyboardInterrupt:
-        print ('Shutting down ROS pose estimation module')
-        cv2.destroyAllWindows()
     
+    """ run DenseFusion """
+    df = DenseFusion(mask_rcnn, pose, refiner, objId)
+    
+    rospy.spin()
+    rate = rospy.Rate(30)
+    while not rospy.is_shutdown():
+        rate.sleep()
+        
+if __name__ == '__main__':
+    main()
