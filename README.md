@@ -24,7 +24,7 @@
 
 ### 2. launch rviz along with publisher/subscriber services
 * `roslaunch densefusion_ros densefusion.launch`
-
+* #### it publishes estimated pose as geometry_msgs/PoseArray
 * #### also possible via
   * `rosrun densefusion_ros densefusion_ros.py` or
   * `./scripts/eval.sh` or 
