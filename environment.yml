@@ -67,3 +67,4 @@ dependencies:
     - opencv-python==4.4.0.42
     - pip==20.2.2
     - urllib3==1.25.10
+prefix: /home/ash/anaconda3/envs/dfros3

@@ -4,17 +4,16 @@ import os
 import sys
 import cv2
 import copy
-import time 
+import time
 import getpass
 import math as m
 import numpy as np
-import numpy.ma as ma 
-import matplotlib.pyplot as plt
+import numpy.ma as ma
 
 import rospy
 
 from colorama import Fore, Style
-from helperFunc import *
+from utils import *
 
 import message_filters
 import std_msgs
@@ -74,7 +73,7 @@ print('maskrcnn model loaded...')
 
 pose = PoseNet(num_points, num_objects)
 pose.cuda()
-pose.load_state_dict(torch.load(path + '/../txonigiri/pose_model.pth'))   
+pose.load_state_dict(torch.load(path + '/../txonigiri/pose_model.pth'))
 pose.eval()
 print("pose_model loaded...")
 
@@ -114,7 +113,7 @@ edges  = np.array([
                 [-edge, edge*.5,  edge]])
 
 class DenseFusion:
-    
+
     def __init__(self, mask_rcnn, pose, refiner, object_index_):
 
         rgb_sub = message_filters.Subscriber('/camera/color/image_raw', Image)
@@ -137,21 +136,21 @@ class DenseFusion:
         self.refiner = refiner
         self.object_index = object_index_
 
-        self.xmap = np.array([[j for i in range(640)] for j in range(480)]) 
+        self.xmap = np.array([[j for i in range(640)] for j in range(480)])
         self.ymap = np.array([[i for i in range(640)] for j in range(480)])
 
     def callback(self, rgb, depth):
 
         # print ('received depth image of type: ' + depth.encoding)
         # print ('received rgb image of type: ' + rgb.encoding)
-        
+
         #https://answers.ros.org/question/64318/how-do-i-convert-an-ros-image-into-a-numpy-array/
         depth = np.frombuffer(depth.data, dtype=np.uint16).reshape(depth.height, depth.width, -1)
         rgb = np.frombuffer(rgb.data, dtype=np.uint8).reshape(rgb.height, rgb.width, -1)
-        
+
         """ estimate pose """
         self.pose_estimator(rgb, depth)
-        
+
         """ publish to ros """
         Publisher(self.viz, self.objs_pose, self.cloud)
 
@@ -179,20 +178,20 @@ class DenseFusion:
             ]
             # for caption in captions:
                 # print(caption)
-            
+
             viz = cmr.utils.draw_instance_bboxes(img=rgb, bboxes=bbox, labels=label + 1, n_class=len(class_names) + 1, captions=captions, masks=mask)
             # cv2.imshow("mask-rcnn", viz), cv2.waitKey(1)
 
         return (mask, bbox, viz)
 
     def pose_refiner(self, iteration, my_t, my_r, points, emb, idx):
-        
+
         for ite in range(0, iteration):
             T = Variable(torch.from_numpy(my_t.astype(np.float32))).cuda().view(1, 3).repeat(num_points, 1).contiguous().view(1, num_points, 3)
             my_mat = quaternion_matrix(my_r)
             R = Variable(torch.from_numpy(my_mat[:3, :3].astype(np.float32))).cuda().view(1, 3, 3)
             my_mat[0:3, 3] = my_t
-            
+
             new_points = torch.bmm((points - T), R).contiguous()
             pred_r, pred_t = self.refiner(new_points, emb, idx)
             pred_r = pred_r.view(1, 1, -1)
@@ -211,15 +210,15 @@ class DenseFusion:
             my_pred = np.append(my_r_final, my_t_final)
             my_r = my_r_final
             my_t = my_t_final
-        
+
         return my_t, my_r
 
     def pose_estimator(self, rgb, depth):
-    
+
         t1 = time.time()
         obj_pose = []
         print(f"{Fore.GREEN}estimating pose..{Style.RESET_ALL}")
-        
+
         self.rgb_s = []
         rgb_s = np.transpose(rgb, (2, 0, 1))
         self.rgb_s.append(rgb_s)
@@ -236,7 +235,7 @@ class DenseFusion:
         # convert img into tensor
         rgb_original = np.transpose(rgb, (2, 0, 1))
         norm = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-        rgb = Variable(norm(torch.from_numpy(rgb.astype(np.float32)))).cuda()        
+        rgb = Variable(norm(torch.from_numpy(rgb.astype(np.float32)))).cuda()
 
         all_masks = []
         self.depth = depth.reshape(480, 640)
@@ -245,29 +244,29 @@ class DenseFusion:
 
         for b in range(len(bbox)):
 
-            mask = mask_depth * mask_label[:,:,b]        
+            mask = mask_depth * mask_label[:,:,b]
             rmin = int(bbox[b,0])
             rmax = int(bbox[b,1])
             cmin = int(bbox[b,2])
             cmax = int(bbox[b,3])
 
             # visualize each masks
-            # plt.imshow(mask), plt.show()
+            # cv2.imshow("mask", cv2.cvtColor(mask, cv2.COLOR_BGR2RGB)), cv2.waitKey(1)
 
             img = np.transpose(rgb_original, (0, 1, 2)) #CxHxW
             choose = mask[rmin : rmax, cmin : cmax].flatten().nonzero()[0]
             if len(choose) == 0:
                 cc = torch.LongTensor([0])
                 return(cc, cc, cc, cc, cc, cc)
-            
+
             if len(choose) > num_points:
                 c_mask = np.zeros(len(choose), dtype=int)
-                c_mask[:num_points] = 1 
+                c_mask[:num_points] = 1
                 np.random.shuffle(c_mask)
                 choose = choose[c_mask.nonzero()]
             else:
                 choose = np.pad(choose, (0, num_points - len(choose)), 'wrap')
-            
+
             depth_masked = self.depth[rmin:rmax, cmin:cmax].flatten()[choose][:, np.newaxis].astype(np.float32)
             xmap_masked = self.xmap[rmin:rmax, cmin:cmax].flatten()[choose][:, np.newaxis].astype(np.float32)
             ymap_masked = self.ymap[rmin:rmax, cmin:cmax].flatten()[choose][:, np.newaxis].astype(np.float32)
@@ -289,7 +288,7 @@ class DenseFusion:
             points = Variable(points).cuda().unsqueeze(0)
             choose = Variable(choose).cuda()#.unsqueeze(0)
             idx = Variable(idx).cuda()#.unsqueeze(0)
-    
+
             pred_r, pred_t, pred_c, emb = self.estimator(img_, points, choose, idx)
             pred_r = pred_r / torch.norm(pred_r, dim=2).view(1, num_points, 1)
             pred_c = pred_c.view(bs, num_points)
@@ -310,7 +309,7 @@ class DenseFusion:
             depth = self.depth[rmin : rmax, cmin : cmax].astype(float)
             depth = depth * mm2m
             dep,_,_,_ = cv2.mean(depth)
-            
+
             """ position mm2m """
             my_t = np.array(my_t*mm2m)
             my_t[2] = dep # use this to get depth of obj centroid
@@ -334,7 +333,7 @@ class DenseFusion:
             Rz = rotation_matrix(5*m.pi/180, [0, 0, 1], my_t)
             R = concatenate_matrices(Rx, Ry, Rz)[:3,:3]
             mat_r = np.dot(mat_r.T, R[:3, :3])
-            
+
             """ transform 3D box and axis with estimated pose and Draw """
             target_df = np.dot(edges, mat_r)
             target_df = np.add(target_df, my_t)
@@ -347,7 +346,7 @@ class DenseFusion:
             """ convert pose to ros-msg """
             I = np.identity(4)
             I[0:3, 0:3] = mat_r
-            I[0:3, -1] = my_t 
+            I[0:3, -1] = my_t
             rot = quaternion_from_matrix(I, True)
             my_t = my_t.reshape(1,3)
             pose = {
@@ -371,64 +370,18 @@ class DenseFusion:
         print(f'{Fore.YELLOW}DenseFusion inference time is:{Style.RESET_ALL}', t3 - t2)
 
 
-def Publisher(viz, objs_pose, cloudPts):
-
-        """ publish/visualize pose """
-        if viz is not None:
-            cv2.imshow("pose", cv2.cvtColor(viz, cv2.COLOR_BGR2RGB))
-            cv2.waitKey(1), cv2.moveWindow('pose', 0, 0)
-
-        """ publish point cloud """ #TODO: need to transform correctly
-        cloud_pub = rospy.Publisher("/onigiriCloud", PointCloud2, queue_size=30)
-        header = std_msgs.msg.Header()
-        header.stamp = rospy.Time.now()
-        header.frame_id = "camera_depth_optical_frame"
-        
-        """ publish pos to ros-msg """
-        poses = objs_pose
-        pose2msg = Pose()
-        pose_array = PoseArray()
-        pose_array.header.stamp = rospy.Time.now()
-        pose_array.header.frame_id = "camera_color_optical_frame"
-        pose_pub = rospy.Publisher('/onigiriPose', PoseArray,queue_size = 30)
-        
-        if poses is not None:
-
-            print("total onigiri(s) found", len(poses))
-            for p in range(len(poses)):
-                print(str(p), poses[p])            
-                pose2msg.position.x = poses[p]['tx']
-                pose2msg.position.y = poses[p]['ty']
-                pose2msg.position.z = poses[p]['tz']
-                pose2msg.orientation.x = poses[p]['qx']
-                pose2msg.orientation.y = poses[p]['qy']
-                pose2msg.orientation.z = poses[p]['qz']
-                pose2msg.orientation.w = poses[p]['qw']
-                pose_array.poses.append(pose2msg)
-
-                # cloudPts = np.dot(cloudPts, cam_mat)
-                # cloudPts = np.squeeze(np.asarray(cloudPts))
-                # cloudPts = np.dot(cloudPts, quaternion_matrix([poses[p]['qx'], poses[p]['qy'], poses[p]['qz'], poses[p]['qw']])[0:3, 0:3])
-                # cloudPts = np.add(cloudPts, [poses[p]['tx'], poses[p]['ty'], poses[p]['tz']])    
-                scaled_cloud = pcl2.create_cloud_xyz32(header,cloudPts)
-                cloud_pub.publish(scaled_cloud)
-            
-            pose_pub.publish(pose_array)
-        else:
-            print(f"{Fore.YELLOW}no onigiri detected{Style.RESET_ALL}")
-
 def main():
-    
+
     rospy.init_node('onigiriPose', anonymous=False)
     rospy.loginfo('streaming now...')
-    
+
     """ run DenseFusion """
     df = DenseFusion(mask_rcnn, pose, refiner, objId)
-    
+
     rospy.spin()
     rate = rospy.Rate(30)
     while not rospy.is_shutdown():
         rate.sleep()
-        
+
 if __name__ == '__main__':
     main()

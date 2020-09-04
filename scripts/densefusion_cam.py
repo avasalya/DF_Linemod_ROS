@@ -8,7 +8,7 @@ import getpass
 import argparse
 import math as m
 import numpy as np
-import numpy.ma as ma 
+import numpy.ma as ma
 import matplotlib.pyplot as plt
 
 import glob
@@ -22,7 +22,7 @@ import chainer
 import chainer.utils as utils
 import chainer_mask_rcnn as cmr
 
-import torch 
+import torch
 import torchvision
 from torchvision import transforms
 from torch.autograd import Variable
@@ -71,8 +71,8 @@ print('maskrcnn model loaded %s' % pretrained_model)
 
 pose = PoseNet(num_points, num_objects)
 pose.cuda()
-pose.load_state_dict(torch.load(path + '/../txonigiri/pose_model.pth'))   
-# pose.load_state_dict(torch.load(path + '/txonigiri/pose_model.pth'))   
+pose.load_state_dict(torch.load(path + '/../txonigiri/pose_model.pth'))
+# pose.load_state_dict(torch.load(path + '/txonigiri/pose_model.pth'))
 pose.eval()
 print("pose_model loaded...")
 
@@ -86,10 +86,10 @@ print("pose_refine_model loaded...")
 #%%
 
 class pose_estimation:
-    
+
     def __init__(self, mask_rcnn, pose, refiner, object_index_, rgb, depth):
-         
-        self.rgb = rgb        
+
+        self.rgb = rgb
         self.rgb = np.transpose(self.rgb, (2, 0, 1))
 
         self.rgb_s = []
@@ -102,7 +102,7 @@ class pose_estimation:
         self.refiner = refiner
         self.object_index = object_index_
 
-        self.xmap = np.array([[j for i in range(640)] for j in range(480)]) 
+        self.xmap = np.array([[j for i in range(640)] for j in range(480)])
         self.ymap = np.array([[i for i in range(640)] for j in range(480)])
 
     def batch_predict(self):
@@ -129,7 +129,7 @@ class pose_estimation:
             ]
             # for caption in captions:
                 # print(caption)
-            
+
             viz = cmr.utils.draw_instance_bboxes(img=rgb, bboxes=bbox, labels=label + 1, n_class=len(class_names) + 1, captions=captions, masks=mask)
 
             # plt.imsave('seg_result/out/frame.png', viz)
@@ -138,13 +138,13 @@ class pose_estimation:
         return (mask, bbox, viz)
 
     def pose_refiner(self, iteration, my_t, my_r, points, emb, idx):
-        
+
         for ite in range(0, iteration):
             T = Variable(torch.from_numpy(my_t.astype(np.float32))).cuda().view(1, 3).repeat(num_points, 1).contiguous().view(1, num_points, 3)
             my_mat = quaternion_matrix(my_r)
             R = Variable(torch.from_numpy(my_mat[:3, :3].astype(np.float32))).cuda().view(1, 3, 3)
             my_mat[0:3, 3] = my_t
-            
+
             new_points = torch.bmm((points - T), R).contiguous()
             pred_r, pred_t = self.refiner(new_points, emb, idx)
             pred_r = pred_r.view(1, 1, -1)
@@ -163,14 +163,14 @@ class pose_estimation:
             my_pred = np.append(my_r_final, my_t_final)
             my_r = my_r_final
             my_t = my_t_final
-        
+
         return my_t, my_r
 
     def pose(self):
-        
+
         mask, bbox, viz = self.draw_seg(self.batch_predict())
-        # cv2.imshow("mask", cv2.cvtColor(viz, cv2.COLOR_BGR2RGB)), cv2.moveWindow('mask', 0, 500) 
-        
+        # cv2.imshow("mask", cv2.cvtColor(viz, cv2.COLOR_BGR2RGB)), cv2.moveWindow('mask', 0, 500)
+
         pred = mask
         pred = pred *255
         pred = np.transpose(pred, (1, 2, 0)) # (CxHxW)->(HxWxC)
@@ -178,7 +178,7 @@ class pose_estimation:
         # convert img into tensor
         rgb_original = self.rgb
         norm = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-        self.rgb = Variable(norm(torch.from_numpy(self.rgb.astype(np.float32)))).cuda()        
+        self.rgb = Variable(norm(torch.from_numpy(self.rgb.astype(np.float32)))).cuda()
 
         all_masks = []
         mask_depth = ma.getmaskarray(ma.masked_not_equal(self.depth, 0))
@@ -187,7 +187,7 @@ class pose_estimation:
         # iterate through detected masks
         for b in range(len(bbox)):
 
-            mask = mask_depth * mask_label[:,:,b]        
+            mask = mask_depth * mask_label[:,:,b]
             rmin = int(bbox[b,0])
             rmax = int(bbox[b,1])
             cmin = int(bbox[b,2])
@@ -201,15 +201,15 @@ class pose_estimation:
             if len(choose) == 0:
                 cc = torch.LongTensor([0])
                 return(cc, cc, cc, cc, cc, cc)
-            
+
             if len(choose) > num_points:
                 c_mask = np.zeros(len(choose), dtype=int)
-                c_mask[:num_points] = 1 
+                c_mask[:num_points] = 1
                 np.random.shuffle(c_mask)
                 choose = choose[c_mask.nonzero()]
             else:
                 choose = np.pad(choose, (0, num_points - len(choose)), 'wrap')
-            
+
             depth_masked = self.depth[rmin:rmax, cmin:cmax].flatten()[choose][:, np.newaxis].astype(np.float32)
             xmap_masked = self.xmap[rmin:rmax, cmin:cmax].flatten()[choose][:, np.newaxis].astype(np.float32)
             ymap_masked = self.ymap[rmin:rmax, cmin:cmax].flatten()[choose][:, np.newaxis].astype(np.float32)
@@ -231,7 +231,7 @@ class pose_estimation:
             points = Variable(points).cuda().unsqueeze(0)
             choose = Variable(choose).cuda()#.unsqueeze(0)
             idx = Variable(idx).cuda()#.unsqueeze(0)
-    
+
             pred_r, pred_t, pred_c, emb = self.estimator(img_, points, choose, idx)
             pred_r = pred_r / torch.norm(pred_r, dim=2).view(1, num_points, 1)
             pred_c = pred_c.view(bs, num_points)
@@ -253,13 +253,13 @@ class pose_estimation:
             depth = self.depth[rmin : rmax, cmin : cmax].astype(float)
             depth = depth * mm2m
             dep,_,_,_ = cv2.mean(depth)
-            
+
             """ position mm2m """
             my_t = np.array(my_t*mm2m)
             # my_t[2] = dep # use this to get depth of obj centroid
             # my_t[1] = my_t[1] + 0.05
             # my_t[0] = my_t[0] + 0.05
-            
+
             print("Pos xyz:{0}".format(my_t))
 
             """ rotation """
@@ -280,7 +280,7 @@ class pose_estimation:
             # p0, p7 = draw_cube(target_cam, viz, g_draw, (255, 165, 0), cam_fx, cam_fy, cam_cx, cam_cy)
             # viz = pil2cv(new_image)
             # draw_axis(viz, np.eye(3), my_t, cam_mat)
-            
+
             """ align 2d bbox with 3D box face """
             # cv2.rectangle(viz, p0, p7, (0,0,255))
 
@@ -290,8 +290,8 @@ class pose_estimation:
             Rz = rotation_matrix(5*m.pi/180, [0, 0, 1], my_t)
             R = concatenate_matrices(Rx, Ry, Rz)[:3,:3]
             mat_r = np.dot(mat_r.T, R[:3, :3])
-            
-            
+
+
             # h, status = cv2.findHomography(cloud, np.dot(points.cpu().numpy(), mat_r))
 
             """ transform 3D box and axis with estimated pose and Draw """
@@ -306,17 +306,17 @@ class pose_estimation:
             """ viz pred pose  """
             cv2.imshow("pose", cv2.cvtColor(viz, cv2.COLOR_BGR2RGB))
             cv2.moveWindow('pose', 0, 0)
-        
+
         else:
             if len(bbox) <= 1:
                 print(f"{Fore.RED}unable to detect pose..{Style.RESET_ALL}")
         return viz
 
-   
+
 if __name__ == '__main__':
-    
+
     autostop = 1000
-    
+
     bs = 1
     objId = 0
     objlist =[1]
@@ -358,7 +358,7 @@ if __name__ == '__main__':
 
     try:
         while True:
-        
+
             t1 = time.time()
 
             # Wait for frame (Color & Depth)
@@ -386,17 +386,17 @@ if __name__ == '__main__':
             # cv2.imshow("merged rgbd", cv2.cvtColor(images, cv2.COLOR_BGR2RGB))
 
             # DF pose estimation
-            pe = pose_estimation(mask_rcnn, pose, refiner, objId, rgb, depth) 
+            pe = pose_estimation(mask_rcnn, pose, refiner, objId, rgb, depth)
             pe.pose()
 
             t2 = time.time()
             print('inference time is :{0}'.format(t2 - t1))
-            
+
             key = cv2.waitKey(1) & 0xFF
             if  key == 27:
                 print("stopping streaming...")
                 break
-            
+
             if t2-t0 > autostop:
                 print("auto stop streaming after {} seconds".format(int(autostop)))
                 break
