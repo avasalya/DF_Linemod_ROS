@@ -1,27 +1,17 @@
 <launch>
- 		<!-- 3d model file of object -->
-    	<arg name="ply_model" default="$(find densefusion_ros)/txonigiri/obj_01.ply" />
-
-		<arg name="gui" default="true" />
-		<param name="use_gui" value="$(arg gui)"/>
-
 		<arg name="rvizconfig" default="$(find densefusion_ros)/rviz/display.rviz" /> 
 		<node name="rviz" pkg="rviz" type="rviz" args="-d $(arg rvizconfig)" required="true" />
 
-		<arg name="point_cloud_height" default="480" />
-		<arg name="point_cloud_width" default="640" />
+    	<!-- <arg name="ply_model" default="$(find densefusion_ros)/txonigiri/cup_noodle.off" /> -->
+	    <!-- <arg name="mesh_file" default="$(find densefusion_ros)/txonigiri/cup_noodle.dae" /> -->
 
-		<arg name="voxel_size" default="0.1" />
-		<arg name="scale" default="100" />
-		<arg name="translation" default="0 0 -3" />
-		<arg name="rotation" default="0 0 0.7071068 0.7071068" />
+		<!-- TODO transform it as per real robot2cam -->
+		<!-- https://answers.ros.org/question/263715/fixed-frame-map-does-not-exist/ -->
+	    <!-- <node pkg="tf" type="static_transform_publisher" name="robot2cam" args="0 0 0 -1.570796 0 -1.570796  robot_base_link  camera_color_optical_frame 10" /> -->
 
-		<node name="onigiriPoseNode" pkg="densefusion_ros" type="densefusion_ros.py" output="screen"
-			args="$(arg ply_model) $(arg voxel_size) $(arg scale) $(arg translation) $(arg rotation)">
-
+		<node name="onigiriPose" pkg="densefusion_ros" type="densefusion_ros.py" output="screen" ns = "onigiri">
 			<!-- <param name="ply_model" type="str" value="$(arg ply_model)" /> -->
-			<param name="point_cloud_height" type="int" value="$(arg point_cloud_height)" />
-			<param name="point_cloud_width" type="int" value="$(arg point_cloud_width)" />
+	        <!-- <param name="mesh_file" type="str" value="$(arg mesh_file)" /> -->
 		</node>
 
 </launch>

@@ -17,9 +17,11 @@ from colorama import Fore, Style
 from helperFunc import *
 
 import message_filters
-from sensor_msgs.msg import Image, CompressedImage
+import std_msgs
+from sensor_msgs.msg import PointCloud2
+import sensor_msgs.point_cloud2 as pcl2
 from geometry_msgs.msg import Pose, PoseArray
-
+from sensor_msgs.msg import Image, CompressedImage
 
 import chainer
 import chainer.utils as utils
@@ -120,7 +122,7 @@ class DenseFusion:
         depth_cache = message_filters.Cache(depth_sub, 100)
         rgb_cache = message_filters.Cache(rgb_sub, 100)
 
-        self.ts = message_filters.ApproximateTimeSynchronizer([rgb_sub, depth_sub], 30, .5)
+        self.ts = message_filters.ApproximateTimeSynchronizer([rgb_sub, depth_sub], 30, .3)
         # self.ts = message_filters.TimeSynchronizer([rgb_sub, depth_sub], 30)
         self.ts.registerCallback(self.callback)
 
@@ -128,6 +130,7 @@ class DenseFusion:
         self.cv_depth = np.zeros((480, 640, 1), np.uint8)
         self.viz = np.zeros((480, 640, 3), np.uint8)
         self.objs_pose = None
+        self.cloud = None
 
         self.mask_rcnn = mask_rcnn
         self.estimator = pose
@@ -149,8 +152,8 @@ class DenseFusion:
         """ estimate pose """
         self.pose_estimator(rgb, depth)
         
-        """ publish pose to ros """
-        posePublisher(self.viz, self.objs_pose)
+        """ publish to ros """
+        Publisher(self.viz, self.objs_pose, self.cloud)
 
     def batch_predict(self):
 
@@ -320,6 +323,7 @@ class DenseFusion:
             """ project point cloud """
             imgpts_cloud,_ = cv2.projectPoints(np.dot(points.cpu().numpy(), mat_r), mat_r, my_t, cam_mat, dist)
             viz = draw_cloudPts(viz, imgpts_cloud, 1)
+            self.cloud = points.cpu().numpy().reshape(500, 3)
 
             """ draw cmr 2D box """
             cv2.rectangle(viz, (cmax, cmin), (rmax, rmin), (255,0,0))
@@ -363,28 +367,32 @@ class DenseFusion:
 
         self.objs_pose = obj_pose
 
-        # cv2.imshow("pose", cv2.cvtColor(self.viz, cv2.COLOR_BGR2RGB))
-        # cv2.waitKey(1), cv2.moveWindow('pose', 0, 0)
         t3 = time.time()
         print(f'{Fore.YELLOW}DenseFusion inference time is:{Style.RESET_ALL}', t3 - t2)
 
 
-def posePublisher(viz, objs_pose):
-        
+def Publisher(viz, objs_pose, cloudPts):
+
         """ publish/visualize pose """
         if viz is not None:
             cv2.imshow("pose", cv2.cvtColor(viz, cv2.COLOR_BGR2RGB))
             cv2.waitKey(1), cv2.moveWindow('pose', 0, 0)
 
+        """ publish point cloud """ #TODO: need to transform correctly
+        cloud_pub = rospy.Publisher("/onigiriCloud", PointCloud2, queue_size=30)
+        header = std_msgs.msg.Header()
+        header.stamp = rospy.Time.now()
+        header.frame_id = "camera_depth_optical_frame"
+        
         """ publish pos to ros-msg """
         poses = objs_pose
         pose2msg = Pose()
         pose_array = PoseArray()
         pose_array.header.stamp = rospy.Time.now()
         pose_array.header.frame_id = "camera_color_optical_frame"
-        pose_pub = rospy.Publisher('/onigiriPose', PoseArray,queue_size = 10)
+        pose_pub = rospy.Publisher('/onigiriPose', PoseArray,queue_size = 30)
         
-        if len(poses) > 0:
+        if poses is not None:
 
             print("total onigiri(s) found", len(poses))
             for p in range(len(poses)):
@@ -397,14 +405,21 @@ def posePublisher(viz, objs_pose):
                 pose2msg.orientation.z = poses[p]['qz']
                 pose2msg.orientation.w = poses[p]['qw']
                 pose_array.poses.append(pose2msg)
+
+                # cloudPts = np.dot(cloudPts, cam_mat)
+                # cloudPts = np.squeeze(np.asarray(cloudPts))
+                # cloudPts = np.dot(cloudPts, quaternion_matrix([poses[p]['qx'], poses[p]['qy'], poses[p]['qz'], poses[p]['qw']])[0:3, 0:3])
+                # cloudPts = np.add(cloudPts, [poses[p]['tx'], poses[p]['ty'], poses[p]['tz']])    
+                scaled_cloud = pcl2.create_cloud_xyz32(header,cloudPts)
+                cloud_pub.publish(scaled_cloud)
+            
             pose_pub.publish(pose_array)
         else:
             print(f"{Fore.YELLOW}no onigiri detected{Style.RESET_ALL}")
 
-
 def main():
     
-    rospy.init_node('onigiriPoseNode', anonymous=False)
+    rospy.init_node('onigiriPose', anonymous=False)
     rospy.loginfo('streaming now...')
     
     """ run DenseFusion """
@@ -416,4 +431,4 @@ def main():
         rate.sleep()
         
 if __name__ == '__main__':
-    main()    
+    main()
