@@ -1,5 +1,5 @@
 <launch>
-		<arg name="rvizconfig" default="$(find densefusion_ros)/rviz/display.rviz" /> 
+		<arg name="rvizconfig" default="$(find densefusion_ros)/rviz/display.rviz" />
 		<node name="rviz" pkg="rviz" type="rviz" args="-d $(arg rvizconfig)" required="true" />
 
     	<!-- <arg name="ply_model" default="$(find densefusion_ros)/txonigiri/cup_noodle.off" /> -->

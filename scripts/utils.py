@@ -1,5 +1,7 @@
+import os
 import cv2 as cv2
 import numpy as np
+import open3d as o3d
 
 import rospy
 import std_msgs
@@ -8,9 +10,13 @@ import sensor_msgs.point_cloud2 as pcl2
 from geometry_msgs.msg import Pose, PoseArray
 from sensor_msgs.msg import Image, CompressedImage
 
+from lib.transformations import quaternion_matrix
 
 from PIL import Image
 from PIL import ImageDraw
+
+path = os.path.dirname(__file__)
+filepath = (path + '/../txonigiri/txonigiri.ply')
 
 def draw_axis(img, R, t, K):
     # How+to+draw+3D+Coordinate+Axes+with+OpenCV+for+face+pose+estimation%3f
@@ -150,7 +156,13 @@ def Publisher(viz, objs_pose, cloudPts):
             cv2.imshow("pose", cv2.cvtColor(viz, cv2.COLOR_BGR2RGB))
             cv2.waitKey(1), cv2.moveWindow('pose', 0, 0)
 
-        """ publish point cloud """ #TODO: need to transform correctly
+        """ publish point cloud """
+        #TODO: use cv.solvePnP or ICP
+        #NOTE: replace model with correct scale
+        mesh_model = o3d.io.read_triangle_mesh(filepath)
+        meshPts = np.asarray(mesh_model.vertices)
+        cloudPts = meshPts*0.01
+
         cloud_pub = rospy.Publisher("/onigiriCloud", PointCloud2, queue_size=30)
         header = std_msgs.msg.Header()
         header.stamp = rospy.Time.now()
@@ -178,11 +190,11 @@ def Publisher(viz, objs_pose, cloudPts):
                 pose2msg.orientation.w = poses[p]['qw']
                 pose_array.poses.append(pose2msg)
 
-                # cloudPts = np.dot(cloudPts, cam_mat)
-                # cloudPts = np.squeeze(np.asarray(cloudPts))
-                # cloudPts = np.dot(cloudPts, quaternion_matrix([poses[p]['qx'], poses[p]['qy'], poses[p]['qz'], poses[p]['qw']])[0:3, 0:3])
-                # cloudPts = np.add(cloudPts, [poses[p]['tx'], poses[p]['ty'], poses[p]['tz']])
-                scaled_cloud = pcl2.create_cloud_xyz32(header,cloudPts)
+                #TODO: need to transform correctly
+                cloudPts = np.dot(cloudPts, quaternion_matrix([poses[p]['qx'], poses[p]['qy'], poses[p]['qz'], poses[p]['qw']])[0:3, 0:3])
+                cloudPts = np.add(cloudPts, [poses[p]['tx'], poses[p]['ty'], poses[p]['tz']])
+
+                scaled_cloud = pcl2.create_cloud_xyz32(header, cloudPts)
                 cloud_pub.publish(scaled_cloud)
 
             pose_pub.publish(pose_array)

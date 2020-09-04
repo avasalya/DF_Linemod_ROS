@@ -9,14 +9,13 @@ import getpass
 import math as m
 import numpy as np
 import numpy.ma as ma
-
-import rospy
-
 from colorama import Fore, Style
+
 from utils import *
 
-import message_filters
+import rospy
 import std_msgs
+import message_filters
 from sensor_msgs.msg import PointCloud2
 import sensor_msgs.point_cloud2 as pcl2
 from geometry_msgs.msg import Pose, PoseArray
@@ -97,7 +96,6 @@ cam_cy = 247.877
 
 dist = np.array([0.0, 0.0, 0.0, 0.0, 0.0])
 cam_mat = np.matrix([ [cam_fx, 0, cam_cx], [0, cam_fy, cam_cy], [0, 0, 1] ])
-
 
 edge = 60.
 edge = edge * mm2m
@@ -303,8 +301,6 @@ class DenseFusion:
             # DF refiner ---results are better without refiner
             # my_t, my_r = self.pose_refiner(3, my_t, my_r, points, emb, idx)
 
-            #TODO  use cv.solvePnP or ICP
-
             """ get mean depth within a box as depth offset """
             depth = self.depth[rmin : rmax, cmin : cmax].astype(float)
             depth = depth * mm2m
@@ -312,7 +308,7 @@ class DenseFusion:
 
             """ position mm2m """
             my_t = np.array(my_t*mm2m)
-            my_t[2] = dep # use this to get depth of obj centroid
+            my_t[2] = dep #NOTE: use this to get depth of obj centroid
             # print("Pos xyz:{0}".format(my_t))
 
             """ rotation """
