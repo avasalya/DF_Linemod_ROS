@@ -146,15 +146,10 @@ def draw_cube(tar, img, g_draw, color, cam_fx, cam_fy, cam_cx, cam_cy):
 
     return p0, p7
 
-def Publisher(viz, objs_pose, cloudPts):
+def Publisher(cam_mat, dist, viz, objs_pose, modelPts, cloudPts):
 
-        """ publish/visualize pose """
-        if viz is not None:
-            cv2.imshow("pose", cv2.cvtColor(viz, cv2.COLOR_BGR2RGB))
-            cv2.waitKey(1), cv2.moveWindow('pose', 0, 0)
-
-        """ publish point cloud """
-        cloud_pub = rospy.Publisher("/onigiriCloud", PointCloud2, queue_size=30)
+        """ publish model cloud pints """
+        model_pub = rospy.Publisher("/onigiriCloud", PointCloud2, queue_size=30)
         header = std_msgs.msg.Header()
         header.stamp = rospy.Time.now()
         header.frame_id = "camera_depth_optical_frame"
@@ -171,7 +166,7 @@ def Publisher(viz, objs_pose, cloudPts):
 
             print("total onigiri(s) found", len(poses))
             for p in range(len(poses)):
-                print(str(p), poses[p])
+                # print(str(p), poses[p])
                 pose2msg.position.x = poses[p]['tx']
                 pose2msg.position.y = poses[p]['ty']
                 pose2msg.position.z = poses[p]['tz']
@@ -181,11 +176,8 @@ def Publisher(viz, objs_pose, cloudPts):
                 pose2msg.orientation.w = poses[p]['qw']
                 pose_array.poses.append(pose2msg)
 
-                #TODO: use cv.solvePnP or ICP
-                #TODO: need to transform correctly
-
                 #offset to align with obj-center
-                objC = np.array([-0.01, 0.05, 0.2])
+                objC = np.array([-0.01, 0.05, 0.1])
                 initRot = rotation_matrix(-m.pi, [0, 1, 0])
 
                 pos = np.array([poses[p]['tx'], poses[p]['ty'], poses[p]['tz']])
@@ -193,11 +185,28 @@ def Publisher(viz, objs_pose, cloudPts):
                 q2rot = quaternion_matrix([poses[p]['qx'], poses[p]['qy'], poses[p]['qz'], poses[p]['qw']])
                 # q2rot = concatenate_matrices(initRot) #q2rot.T
 
-                cloudPts = np.dot(cloudPts, q2rot[0:3, 0:3])
-                cloudPts = np.add(cloudPts, pos)
+                modelPts = np.dot(modelPts, q2rot[0:3, 0:3])
+                modelPts = np.add(modelPts, pos)
 
-                scaled_cloud = pcl2.create_cloud_xyz32(header, cloudPts)
-                cloud_pub.publish(scaled_cloud)
+                """ PnP for refinement """
+                # _, rvec, tvec = cv2.solvePnP(modelPts, cloudPts, cam_mat, dist, flags=cv2.SOLVEPNP_EPNP)
+                _, rvec, tvec, inliers = cv2.solvePnPRansac(modelPts, cloudPts, cam_mat, dist)
+
+                rvec, tvec = cv2.solvePnPRefineLM(modelPts, cloudPts, cam_mat, dist, rvec, tvec)
+                rvec, tvec = cv2.solvePnPRefineVVS(modelPts, cloudPts, cam_mat, dist, rvec, tvec)
+
+                rvec = cv2.Rodrigues(rvec)[0]
+                imgpts_cloud,_ = cv2.projectPoints(np.dot(modelPts, rvec), rvec, np.zeros(shape=tvec.shape), cam_mat, dist)
+
+                scaled_cloud = pcl2.create_cloud_xyz32(header, modelPts)
+                model_pub.publish(scaled_cloud)
+
+            """ publish/visualize pose """
+            if viz is not None:
+                vizPnP = draw_cloudPts(viz, imgpts_cloud, 1)
+                cv2.imshow("posePnP", cv2.cvtColor(vizPnP, cv2.COLOR_BGR2RGB))
+                cv2.waitKey(1), cv2.moveWindow('posePnP', 0, 0)
+
 
             pose_pub.publish(pose_array)
         else:

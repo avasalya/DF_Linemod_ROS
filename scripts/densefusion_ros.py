@@ -9,6 +9,7 @@ import getpass
 import math as m
 import numpy as np
 import open3d as o3d
+import random as rand
 import numpy.ma as ma
 from colorama import Fore, Style
 
@@ -75,7 +76,7 @@ pose = PoseNet(num_points, num_objects)
 pose.cuda()
 pose.load_state_dict(torch.load(path + '/../txonigiri/pose_model.pth'))
 pose.eval()
-print("pose odel loaded...")
+print("pose model loaded...")
 
 refiner = PoseRefineNet(num_points, num_objects)
 refiner.cuda()
@@ -85,6 +86,7 @@ print("pose refine model loaded...")
 
 filepath = (path + '/../txonigiri/txonigiri.ply')
 mesh_model = o3d.io.read_triangle_mesh(filepath)
+randomIndices = rand.sample(range(0, 9958), 500)
 print("object mesh model loaded...")
 
 bs = 1
@@ -132,7 +134,8 @@ class DenseFusion:
         self.cv_depth = np.zeros((480, 640, 1), np.uint8)
         self.viz = np.zeros((480, 640, 3), np.uint8)
         self.objs_pose = None
-        self.cloud = None
+        self.modelPts = None
+        self.cloudPts = None
 
         self.mask_rcnn = mask_rcnn
         self.estimator = pose
@@ -155,8 +158,10 @@ class DenseFusion:
         self.pose_estimator(rgb, depth)
 
         """ publish to ros """
-        self.cloud = np.asarray(mesh_model.vertices) * 0.01
-        Publisher(self.viz, self.objs_pose, self.cloud)
+        self.modelPts = np.asarray(mesh_model.vertices) * 0.01 #change units
+        self.modelPts = self.modelPts[randomIndices, :]
+
+        Publisher(cam_mat, dist, self.viz, self.objs_pose, self.modelPts, self.cloudPts)
 
     def batch_predict(self):
 
@@ -304,7 +309,7 @@ class DenseFusion:
             my_t = (points.view(bs * num_points, 1, 3) + pred_t)[which_max[0]].view(-1).cpu().data.numpy()
             my_pred = np.append(my_r, my_t)
 
-            # DF refiner ---results are better without refiner
+            """ DF refiner ---results are better without refiner """
             # my_t, my_r = self.pose_refiner(3, my_t, my_r, points, emb, idx)
 
             """ get mean depth within a box as depth offset """
@@ -323,8 +328,8 @@ class DenseFusion:
 
             """ project point cloud """
             imgpts_cloud,_ = cv2.projectPoints(np.dot(points.cpu().numpy(), mat_r), mat_r, my_t, cam_mat, dist)
-            viz = draw_cloudPts(viz, imgpts_cloud, 1)
-            self.cloud = points.cpu().numpy().reshape(500, 3)
+            # viz = draw_cloudPts(viz, imgpts_cloud, 1) #applying after PnP
+            self.cloudPts = imgpts_cloud.reshape(500, 2)
 
             """ draw cmr 2D box """
             cv2.rectangle(viz, (cmax, cmin), (rmax, rmin), (255,0,0))
