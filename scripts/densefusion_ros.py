@@ -8,6 +8,7 @@ import time
 import getpass
 import math as m
 import numpy as np
+import open3d as o3d
 import numpy.ma as ma
 from colorama import Fore, Style
 
@@ -74,13 +75,17 @@ pose = PoseNet(num_points, num_objects)
 pose.cuda()
 pose.load_state_dict(torch.load(path + '/../txonigiri/pose_model.pth'))
 pose.eval()
-print("pose_model loaded...")
+print("pose odel loaded...")
 
 refiner = PoseRefineNet(num_points, num_objects)
 refiner.cuda()
 refiner.load_state_dict(torch.load(path + '/../txonigiri/pose_refine_model.pth'))
 refiner.eval()
-print("pose_refine_model loaded...")
+print("pose refine model loaded...")
+
+filepath = (path + '/../txonigiri/txonigiri.ply')
+mesh_model = o3d.io.read_triangle_mesh(filepath)
+print("object mesh model loaded...")
 
 bs = 1
 objId = 0
@@ -150,6 +155,7 @@ class DenseFusion:
         self.pose_estimator(rgb, depth)
 
         """ publish to ros """
+        self.cloud = np.asarray(mesh_model.vertices) * 0.01
         Publisher(self.viz, self.objs_pose, self.cloud)
 
     def batch_predict(self):
@@ -357,7 +363,7 @@ class DenseFusion:
             obj_pose.append(pose)
             self.viz = viz
         else:
-            if len(bbox) <= 1:
+            if len(bbox) < 1:
                 print(f"{Fore.RED}unable to detect pose..{Style.RESET_ALL}")
 
         self.objs_pose = obj_pose
