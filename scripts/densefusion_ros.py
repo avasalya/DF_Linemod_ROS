@@ -328,7 +328,7 @@ class DenseFusion:
 
             """ project point cloud """
             imgpts_cloud,_ = cv2.projectPoints(np.dot(points.cpu().numpy(), mat_r), mat_r, my_t, cam_mat, dist)
-            # viz = draw_cloudPts(viz, imgpts_cloud, 1) #applying after PnP
+            viz = draw_pointCloud(viz, imgpts_cloud, [255, 0, 0]) # cloudPts
             self.cloudPts = imgpts_cloud.reshape(500, 2)
 
             """ draw cmr 2D box """

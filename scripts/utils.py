@@ -2,6 +2,7 @@ import os
 import math as m
 import cv2 as cv2
 import numpy as np
+import random as rand
 
 import rospy
 import std_msgs
@@ -25,12 +26,9 @@ def draw_axis(img, R, t, K):
     img = cv2.line(img, tuple(axisPoints[3].ravel()), tuple(axisPoints[2].ravel()), (0,0,255), 3)
     return img
 
-def draw_cloudPts(img, imgpts, label):
-    color = [[254,0,0],[254,244,0],[171,242,0],[0,216,254],[1,0,254],[95,0,254],[254,0,221],[0,0,0],[153,56,0],[138,36,124],[107,153,0],[5,0,153],[76,76,76],[32,153,67],[41,20,240],[230,111,240],[211,222,6],[40,233,70],[130,24,70],[244,200,210],[70,80,90],[30,40,30]]
+def draw_pointCloud(img, imgpts, color):
     for point in imgpts:
-
-        img=cv2.circle(img,(int(point[0][0]),int(point[0][1])), 1, color[int(label)], -1)
-        # cv2.imshow('color', img)
+        img=cv2.circle(img,(int(point[0][0]),int(point[0][1])), 1, color, -1)
     return img
 
 def pil2cv(image):
@@ -185,25 +183,27 @@ def Publisher(cam_mat, dist, viz, objs_pose, modelPts, cloudPts):
                 q2rot = quaternion_matrix([poses[p]['qx'], poses[p]['qy'], poses[p]['qz'], poses[p]['qw']])
                 # q2rot = concatenate_matrices(initRot) #q2rot.T
 
+                """ PnP for refinement """
+                # # _, rvec, tvec, inliers = cv2.solvePnPRansac(modelPts, cloudPts, cam_mat, dist)
+                # rvec = cv2.Rodrigues(q2rot[0:3, 0:3])[0]
+                # tvec = pos
+                # rvec, tvec = cv2.solvePnPRefineVVS(modelPts, cloudPts, cam_mat, dist, rvec, tvec)
+                # rvec, tvec = cv2.solvePnPRefineLM(modelPts, cloudPts, cam_mat, dist, rvec, tvec)
+
+                # pnpRot = cv2.Rodrigues(rvec)[0]
+                # imgpts_cloud,_ = cv2.projectPoints(np.dot(modelPts, pnpRot), pnpRot, np.array([0.,0.,0.]), cam_mat, dist)
+
+                # transform modelPoints w.r.t estimated pose
                 modelPts = np.dot(modelPts, q2rot[0:3, 0:3])
                 modelPts = np.add(modelPts, pos)
-
-                """ PnP for refinement """
-                # _, rvec, tvec = cv2.solvePnP(modelPts, cloudPts, cam_mat, dist, flags=cv2.SOLVEPNP_EPNP)
-                _, rvec, tvec, inliers = cv2.solvePnPRansac(modelPts, cloudPts, cam_mat, dist)
-
-                rvec, tvec = cv2.solvePnPRefineLM(modelPts, cloudPts, cam_mat, dist, rvec, tvec)
-                rvec, tvec = cv2.solvePnPRefineVVS(modelPts, cloudPts, cam_mat, dist, rvec, tvec)
-
-                rvec = cv2.Rodrigues(rvec)[0]
-                imgpts_cloud,_ = cv2.projectPoints(np.dot(modelPts, rvec), rvec, np.zeros(shape=tvec.shape), cam_mat, dist)
 
                 scaled_cloud = pcl2.create_cloud_xyz32(header, modelPts)
                 model_pub.publish(scaled_cloud)
 
             """ publish/visualize pose """
             if viz is not None:
-                vizPnP = draw_cloudPts(viz, imgpts_cloud, 1)
+                imgpts_cloud,_ = cv2.projectPoints(modelPts, np.identity(3), np.array([0.,0.,0.]), cam_mat, dist)
+                vizPnP = draw_pointCloud(viz, imgpts_cloud, [0,255,0]) # modelPts
                 cv2.imshow("posePnP", cv2.cvtColor(vizPnP, cv2.COLOR_BGR2RGB))
                 cv2.waitKey(1), cv2.moveWindow('posePnP', 0, 0)
 
