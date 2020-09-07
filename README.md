@@ -14,6 +14,8 @@
 
 ## install realsense ROS package
 * https://github.com/IntelRealSense/realsense-ros
+* change intrinsic parameters as per your camera
+    * ***cam_fx***, ***cam_fy***, ***cam_cx***, ***cam_cy***
 
 ## download and unzip `txonigiri` folder containing weights
 * https://www.dropbox.com/sh/wkmqd0w1tvo4592/AADWt9j5SjiklJ5X0dpsSILAa?dl=0

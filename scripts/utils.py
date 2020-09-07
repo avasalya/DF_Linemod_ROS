@@ -158,7 +158,6 @@ def Publisher(viz, objs_pose, cloudPts):
 
         """ publish point cloud """
         #TODO: use cv.solvePnP or ICP
-        #NOTE: replace model with correct scale
         mesh_model = o3d.io.read_triangle_mesh(filepath)
         meshPts = np.asarray(mesh_model.vertices)
         cloudPts = meshPts*0.01
