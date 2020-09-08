@@ -326,7 +326,7 @@ class DenseFusion:
             mat_r = quaternion_matrix(my_r)[:3, :3]
             # print('estimated rotation is\n:{0}'.format(mat_r))
 
-            """ project point cloud """
+            """ project depth point cloud """
             imgpts_cloud,_ = cv2.projectPoints(np.dot(points.cpu().numpy(), mat_r), mat_r, my_t, cam_mat, dist)
             viz = draw_pointCloud(viz, imgpts_cloud, [255, 0, 0]) # cloudPts
             self.cloudPts = imgpts_cloud.reshape(500, 2)
@@ -342,13 +342,13 @@ class DenseFusion:
             mat_r = np.dot(mat_r.T, R[:3, :3])
 
             """ transform 3D box and axis with estimated pose and Draw """
-            target_df = np.dot(edges, mat_r)
-            target_df = np.add(target_df, my_t)
-            new_image = cv2pil(viz)
-            g_draw = ImageDraw.Draw(new_image)
-            _,_ = draw_cube(target_df, viz, g_draw, (255, 255, 255), cam_fx, cam_fy, cam_cx, cam_cy)
-            viz = pil2cv(new_image)
-            draw_axis(viz, mat_r, my_t, cam_mat)
+            # target_df = np.dot(edges, mat_r)
+            # target_df = np.add(target_df, my_t)
+            # new_image = cv2pil(viz)
+            # g_draw = ImageDraw.Draw(new_image)
+            # _,_ = draw_cube(target_df, viz, g_draw, (255, 255, 255), cam_fx, cam_fy, cam_cx, cam_cy)
+            # viz = pil2cv(new_image)
+            # draw_axis(viz, mat_r, my_t, cam_mat)
 
             """ convert pose to ros-msg """
             I = np.identity(4)
@@ -383,7 +383,7 @@ def main():
     rospy.loginfo('streaming now...')
 
     """ run DenseFusion """
-    df = DenseFusion(mask_rcnn, pose, refiner, objId)
+    DenseFusion(mask_rcnn, pose, refiner, objId)
 
     rospy.spin()
     rate = rospy.Rate(30)

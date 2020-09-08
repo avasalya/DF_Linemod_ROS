@@ -15,6 +15,7 @@ from lib.transformations import quaternion_matrix, rotation_matrix, concatenate_
 
 from PIL import Image
 from PIL import ImageDraw
+from colorama import Fore, Style
 
 def draw_axis(img, R, t, K):
     # How+to+draw+3D+Coordinate+Axes+with+OpenCV+for+face+pose+estimation%3f
@@ -184,30 +185,25 @@ def Publisher(cam_mat, dist, viz, objs_pose, modelPts, cloudPts):
                 # q2rot = concatenate_matrices(initRot) #q2rot.T
 
                 """ PnP for refinement """
-                # # _, rvec, tvec, inliers = cv2.solvePnPRansac(modelPts, cloudPts, cam_mat, dist)
-                # rvec = cv2.Rodrigues(q2rot[0:3, 0:3])[0]
-                # tvec = pos
-                # rvec, tvec = cv2.solvePnPRefineVVS(modelPts, cloudPts, cam_mat, dist, rvec, tvec)
-                # rvec, tvec = cv2.solvePnPRefineLM(modelPts, cloudPts, cam_mat, dist, rvec, tvec)
+                # rvec, tvec = cv2.solvePnPRefineVVS(modelPts, cloudPts, cam_mat, dist, cv2.Rodrigues(q2rot[0:3, 0:3])[0], np.array([0.,0.,0.]))
 
-                # pnpRot = cv2.Rodrigues(rvec)[0]
-                # imgpts_cloud,_ = cv2.projectPoints(np.dot(modelPts, pnpRot), pnpRot, np.array([0.,0.,0.]), cam_mat, dist)
-
-                # transform modelPoints w.r.t estimated pose
+                """ transform modelPoints w.r.t estimated pose """
                 modelPts = np.dot(modelPts, q2rot[0:3, 0:3])
                 modelPts = np.add(modelPts, pos)
 
+                """ send to ros """
                 scaled_cloud = pcl2.create_cloud_xyz32(header, modelPts)
                 model_pub.publish(scaled_cloud)
 
-            """ publish/visualize pose """
-            if viz is not None:
-                imgpts_cloud,_ = cv2.projectPoints(modelPts, np.identity(3), np.array([0.,0.,0.]), cam_mat, dist)
-                vizPnP = draw_pointCloud(viz, imgpts_cloud, [0,255,0]) # modelPts
-                cv2.imshow("posePnP", cv2.cvtColor(vizPnP, cv2.COLOR_BGR2RGB))
-                cv2.waitKey(1), cv2.moveWindow('posePnP', 0, 0)
+                """ publish/visualize pose """
+                if viz is not None:
+                    imgpts_cloud,_ = cv2.projectPoints(modelPts, np.identity(3), np.array([0.,0.,0.]), cam_mat, dist)
+                    vizPnP = draw_pointCloud(viz, imgpts_cloud, [0,255,0]) # modelPts
+                    draw_axis(viz, q2rot[0:3, 0:3], pos, cam_mat)
+                    cv2.imshow("posePnP", cv2.cvtColor(vizPnP, cv2.COLOR_BGR2RGB))
+                    cv2.waitKey(1), #cv2.moveWindow('posePnP', 0, 0)
 
 
             pose_pub.publish(pose_array)
         else:
-            print(f"{Fore.YELLOW}no onigiri detected{Style.RESET_ALL}")
+            print(f"{Fore.RED}no onigiri detected{Style.RESET_ALL}")
