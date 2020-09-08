@@ -12,7 +12,7 @@ old-scripts/out/
 
 *.vscode/
 
-*DF-ros-linemod.code-workspace
+*.code-workspace
 
 # Distribution / packaging
 .Python
