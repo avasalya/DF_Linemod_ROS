@@ -6,10 +6,13 @@ import random as rand
 
 import rospy
 import std_msgs
+
 from sensor_msgs.msg import PointCloud2
 import sensor_msgs.point_cloud2 as pcl2
-from geometry_msgs.msg import Pose, PoseArray
 from sensor_msgs.msg import Image, CompressedImage
+
+import geometry_msgs.msg as gm
+from geometry_msgs.msg import Pose, PoseArray
 
 from lib.transformations import quaternion_matrix, rotation_matrix, concatenate_matrices
 
@@ -145,10 +148,9 @@ def draw_cube(tar, img, g_draw, color, cam_fx, cam_fy, cam_cx, cam_cy):
 
     return p0, p7
 
-def Publisher(cam_mat, dist, viz, objs_pose, modelPts, cloudPts):
+def Publisher(model_pub, pose_pub, pose_sub, pa, cam_mat, dist, viz, objs_pose, modelPts, cloudPts):
 
         """ publish model cloud pints """
-        model_pub = rospy.Publisher("/onigiriCloud", PointCloud2, queue_size=30)
         header = std_msgs.msg.Header()
         header.stamp = rospy.Time.now()
         header.frame_id = "camera_depth_optical_frame"
@@ -159,7 +161,14 @@ def Publisher(cam_mat, dist, viz, objs_pose, modelPts, cloudPts):
         pose_array = PoseArray()
         pose_array.header.stamp = rospy.Time.now()
         pose_array.header.frame_id = "camera_color_optical_frame"
-        pose_pub = rospy.Publisher('/onigiriPose', PoseArray,queue_size = 30)
+
+        """ subscribe to pose in camera_color_optical_frame  """
+        getPose = pa.poses
+        header = pa.header
+        # getRosPos = []
+        # getRosQuat = []
+        pos = np.zeros(3)
+        quat = np.zeros(4)
 
         if poses is not None:
 
@@ -169,11 +178,23 @@ def Publisher(cam_mat, dist, viz, objs_pose, modelPts, cloudPts):
                 pose2msg.position.x = poses[p]['tx']
                 pose2msg.position.y = poses[p]['ty']
                 pose2msg.position.z = poses[p]['tz']
+                pose2msg.orientation.w = poses[p]['qw']
                 pose2msg.orientation.x = poses[p]['qx']
                 pose2msg.orientation.y = poses[p]['qy']
                 pose2msg.orientation.z = poses[p]['qz']
-                pose2msg.orientation.w = poses[p]['qw']
                 pose_array.poses.append(pose2msg)
+
+
+                # TODO:
+                # print(header.seq)
+                # pos[0] = getPose[p].position.x
+                # pos[1] = getPose[p].position.y
+                # pos[2] = getPose[p].position.z
+                # quat[0] = getPose[p].orientation.x
+                # quat[1] = getPose[p].orientation.y
+                # quat[2] = getPose[p].orientation.z
+                # quat[3] = getPose[p].orientation.w
+
 
                 #offset to align with obj-center
                 objC = np.array([-0.01, 0.05, 0.])
@@ -181,23 +202,12 @@ def Publisher(cam_mat, dist, viz, objs_pose, modelPts, cloudPts):
 
                 pos = np.array([poses[p]['tx'], poses[p]['ty'], poses[p]['tz']])
                 pos =  pos + objC
-                q2rot = quaternion_matrix([poses[p]['qx'], poses[p]['qy'], poses[p]['qz'], poses[p]['qw']])
-                # q2rot = concatenate_matrices(initRot) #q2rot.T
+                q2rot = quaternion_matrix([poses[p]['qw'], poses[p]['qx'], poses[p]['qy'], poses[p]['qz']])
+                # q2rot = concatenate_matrices(initRot, q2rot.T)
 
                 """ transform modelPoints w.r.t estimated pose """
                 modelPts = np.dot(modelPts, q2rot[0:3, 0:3])
                 modelPts = np.add(modelPts, pos)
-
-                """ object w.r.t model """
-                # objPose = np.identity(4)
-                # objPose[0:3, 0:3] = q2rot[0:3, 0:3]
-                # objPose[0:3, -1] = pos
-                # modelPose = np.identity(4)
-                # modelPose[0:3, 0:3] = cv2.Rodrigues(rvec)[0]
-                # modelPose[0:3, -1] = tvec
-                # modelPose = concatenate_matrices(objPose, modelPose)
-                # print(modelPose)
-                # modelPts = np.dot(modelPts, modelPose[0:3, 0:3])
 
                 """ send to ros """
                 scaled_cloud = pcl2.create_cloud_xyz32(header, modelPts)
@@ -208,11 +218,15 @@ def Publisher(cam_mat, dist, viz, objs_pose, modelPts, cloudPts):
                     imgpts_cloud,_ = cv2.projectPoints(modelPts, np.identity(3), np.array([0.,0.,0.]), cam_mat, dist)
                     vizPnP = draw_pointCloud(viz, imgpts_cloud, [0,255,0]) # modelPts
                     draw_axis(viz, q2rot[0:3, 0:3], pos, cam_mat)
+                    modelPts = np.zeros(shape=modelPts.shape)
                 cv2.imshow("posePnP", cv2.cvtColor(vizPnP, cv2.COLOR_BGR2RGB))
                 cv2.waitKey(1), #cv2.moveWindow('posePnP', 0, 0)
 
-                modelPts = np.zeros(shape=modelPts.shape)
+                # getRosPos.append(pos)
+                # getRosQuat.append(quat)
 
             pose_pub.publish(pose_array)
         else:
             print(f"{Fore.RED}no onigiri detected{Style.RESET_ALL}")
+
+

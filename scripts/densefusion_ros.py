@@ -121,12 +121,14 @@ class DenseFusion:
 
     def __init__(self, mask_rcnn, pose, refiner, object_index_):
 
+        """ publisher / subscriber """
         rgb_sub = message_filters.Subscriber('/camera/color/image_raw', Image)
         depth_sub = message_filters.Subscriber('/camera/aligned_depth_to_color/image_raw', Image)
-        depth_cache = message_filters.Cache(depth_sub, 100)
-        rgb_cache = message_filters.Cache(rgb_sub, 100)
+        self.model_pub = rospy.Publisher("/onigiriCloud", PointCloud2, queue_size=30)
+        self.pose_pub = rospy.Publisher('/onigiriPose', PoseArray, queue_size = 30)
+        self.pose_sub = rospy.Subscriber('/onigiriPose', PoseArray, self.poseCallback, queue_size = 30)
 
-        self.ts = message_filters.ApproximateTimeSynchronizer([rgb_sub, depth_sub], 30, .3)
+        self.ts = message_filters.ApproximateTimeSynchronizer([rgb_sub, depth_sub], 30, 1)
         # self.ts = message_filters.TimeSynchronizer([rgb_sub, depth_sub], 30)
         self.ts.registerCallback(self.callback)
 
@@ -136,6 +138,7 @@ class DenseFusion:
         self.objs_pose = None
         self.modelPts = None
         self.cloudPts = None
+        self.poseArray = PoseArray()
 
         self.mask_rcnn = mask_rcnn
         self.estimator = pose
@@ -144,6 +147,9 @@ class DenseFusion:
 
         self.xmap = np.array([[j for i in range(640)] for j in range(480)])
         self.ymap = np.array([[i for i in range(640)] for j in range(480)])
+
+    def poseCallback(self, poseArray):
+        self.poseArray = poseArray
 
     def callback(self, rgb, depth):
 
@@ -162,7 +168,9 @@ class DenseFusion:
             self.modelPts = np.asarray(mesh_model.vertices) * 0.01 #change units
             self.modelPts = self.modelPts[randomIndices, :]
 
-            Publisher(cam_mat, dist, self.viz, self.objs_pose, self.modelPts, self.cloudPts)
+            Publisher(self.model_pub, self.pose_pub, self.pose_sub, self.poseArray,
+                    cam_mat, dist, self.viz, self.objs_pose, self.modelPts, self.cloudPts)
+
         except rospy.ROSException:
             print(f'{Fore.RED}ROS Intruptted')
 
@@ -312,8 +320,8 @@ class DenseFusion:
             my_t = (points.view(bs * num_points, 1, 3) + pred_t)[which_max[0]].view(-1).cpu().data.numpy()
             my_pred = np.append(my_r, my_t)
 
-            """ DF refiner ---results are better without refiner """
-            my_t, my_r = self.pose_refiner(1, my_t, my_r, points, emb, idx)
+            """ DF refiner NOTE: results are better without refiner """
+            # my_t, my_r = self.pose_refiner(1, my_t, my_r, points, emb, idx)
 
             """ PnP for refinement """
             rot_ = quaternion_matrix(my_r)[:3, :3]
@@ -362,16 +370,16 @@ class DenseFusion:
             I = np.identity(4)
             I[0:3, 0:3] = mat_r
             I[0:3, -1] = my_t
-            rot = quaternion_from_matrix(I, True)
+            rot = quaternion_from_matrix(I, True) #wxyz
             my_t = my_t.reshape(1,3)
             pose = {
                     'tx':my_t[0][0],
                     'ty':my_t[0][1],
                     'tz':my_t[0][2],
-                    'qx':rot[0],
-                    'qy':rot[1],
-                    'qz':rot[2],
-                    'qw':rot[3]}
+                    'qw':rot[0],
+                    'qx':rot[1],
+                    'qy':rot[2],
+                    'qz':rot[3]}
 
             obj_pose.append(pose)
             self.viz = viz
@@ -394,7 +402,7 @@ def main():
     DenseFusion(mask_rcnn, pose, refiner, objId)
 
     rospy.spin()
-    rate = rospy.Rate(3)
+    rate = rospy.Rate(1)
     while not rospy.is_shutdown():
         rate.sleep()
 
