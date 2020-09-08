@@ -154,14 +154,17 @@ class DenseFusion:
         depth = np.frombuffer(depth.data, dtype=np.uint16).reshape(depth.height, depth.width, -1)
         rgb = np.frombuffer(rgb.data, dtype=np.uint8).reshape(rgb.height, rgb.width, -1)
 
-        """ estimate pose """
-        self.pose_estimator(rgb, depth)
+        try:
+            """ estimate pose """
+            self.pose_estimator(rgb, depth)
 
-        """ publish to ros """
-        self.modelPts = np.asarray(mesh_model.vertices) * 0.01 #change units
-        self.modelPts = self.modelPts[randomIndices, :]
+            """ publish to ros """
+            self.modelPts = np.asarray(mesh_model.vertices) * 0.01 #change units
+            self.modelPts = self.modelPts[randomIndices, :]
 
-        Publisher(cam_mat, dist, self.viz, self.objs_pose, self.modelPts, self.cloudPts)
+            Publisher(cam_mat, dist, self.viz, self.objs_pose, self.modelPts, self.cloudPts)
+        except rospy.ROSException:
+            print(f'{Fore.RED}ROS Intruptted')
 
     def batch_predict(self):
 
@@ -310,7 +313,12 @@ class DenseFusion:
             my_pred = np.append(my_r, my_t)
 
             """ DF refiner ---results are better without refiner """
-            # my_t, my_r = self.pose_refiner(3, my_t, my_r, points, emb, idx)
+            my_t, my_r = self.pose_refiner(1, my_t, my_r, points, emb, idx)
+
+            """ PnP for refinement """
+            rot_ = quaternion_matrix(my_r)[:3, :3]
+            rot_ = cv2.Rodrigues(rot_)[0]
+            # rvec, tvec = cv2.solvePnPRefineVVS(self.modelPts, self.cloudPts, cam_mat, dist, rot_, my_t)
 
             """ get mean depth within a box as depth offset """
             depth = self.depth[rmin : rmax, cmin : cmax].astype(float)
@@ -386,7 +394,7 @@ def main():
     DenseFusion(mask_rcnn, pose, refiner, objId)
 
     rospy.spin()
-    rate = rospy.Rate(30)
+    rate = rospy.Rate(3)
     while not rospy.is_shutdown():
         rate.sleep()
 

@@ -58,9 +58,9 @@ def DrawDot(g_draw, point, pointColor, pointRadius):
             point[1] + pointRadius
         ]
         g_draw.ellipse(xy,
-                       fill=pointColor,
-                       outline=pointColor
-                       )
+                    fill=pointColor,
+                    outline=pointColor
+                    )
 
 def draw_cube(tar, img, g_draw, color, cam_fx, cam_fy, cam_cx, cam_cy):
     # pinhole camera model/ project the cubeoid on the image plane using camera intrinsics
@@ -153,7 +153,7 @@ def Publisher(cam_mat, dist, viz, objs_pose, modelPts, cloudPts):
         header.stamp = rospy.Time.now()
         header.frame_id = "camera_depth_optical_frame"
 
-        """ publish pos to ros-msg """
+        """ publish pose to ros-msg """
         poses = objs_pose
         pose2msg = Pose()
         pose_array = PoseArray()
@@ -176,7 +176,7 @@ def Publisher(cam_mat, dist, viz, objs_pose, modelPts, cloudPts):
                 pose_array.poses.append(pose2msg)
 
                 #offset to align with obj-center
-                objC = np.array([-0.01, 0.05, 0.1])
+                objC = np.array([-0.01, 0.05, 0.])
                 initRot = rotation_matrix(-m.pi, [0, 1, 0])
 
                 pos = np.array([poses[p]['tx'], poses[p]['ty'], poses[p]['tz']])
@@ -184,12 +184,20 @@ def Publisher(cam_mat, dist, viz, objs_pose, modelPts, cloudPts):
                 q2rot = quaternion_matrix([poses[p]['qx'], poses[p]['qy'], poses[p]['qz'], poses[p]['qw']])
                 # q2rot = concatenate_matrices(initRot) #q2rot.T
 
-                """ PnP for refinement """
-                # rvec, tvec = cv2.solvePnPRefineVVS(modelPts, cloudPts, cam_mat, dist, cv2.Rodrigues(q2rot[0:3, 0:3])[0], np.array([0.,0.,0.]))
-
                 """ transform modelPoints w.r.t estimated pose """
                 modelPts = np.dot(modelPts, q2rot[0:3, 0:3])
                 modelPts = np.add(modelPts, pos)
+
+                """ object w.r.t model """
+                # objPose = np.identity(4)
+                # objPose[0:3, 0:3] = q2rot[0:3, 0:3]
+                # objPose[0:3, -1] = pos
+                # modelPose = np.identity(4)
+                # modelPose[0:3, 0:3] = cv2.Rodrigues(rvec)[0]
+                # modelPose[0:3, -1] = tvec
+                # modelPose = concatenate_matrices(objPose, modelPose)
+                # print(modelPose)
+                # modelPts = np.dot(modelPts, modelPose[0:3, 0:3])
 
                 """ send to ros """
                 scaled_cloud = pcl2.create_cloud_xyz32(header, modelPts)
@@ -200,9 +208,10 @@ def Publisher(cam_mat, dist, viz, objs_pose, modelPts, cloudPts):
                     imgpts_cloud,_ = cv2.projectPoints(modelPts, np.identity(3), np.array([0.,0.,0.]), cam_mat, dist)
                     vizPnP = draw_pointCloud(viz, imgpts_cloud, [0,255,0]) # modelPts
                     draw_axis(viz, q2rot[0:3, 0:3], pos, cam_mat)
-                    cv2.imshow("posePnP", cv2.cvtColor(vizPnP, cv2.COLOR_BGR2RGB))
-                    cv2.waitKey(1), #cv2.moveWindow('posePnP', 0, 0)
+                cv2.imshow("posePnP", cv2.cvtColor(vizPnP, cv2.COLOR_BGR2RGB))
+                cv2.waitKey(1), #cv2.moveWindow('posePnP', 0, 0)
 
+                modelPts = np.zeros(shape=modelPts.shape)
 
             pose_pub.publish(pose_array)
         else:
