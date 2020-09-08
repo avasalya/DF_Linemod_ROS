@@ -148,85 +148,60 @@ def draw_cube(tar, img, g_draw, color, cam_fx, cam_fy, cam_cx, cam_cy):
 
     return p0, p7
 
-def Publisher(model_pub, pose_pub, pose_sub, pa, cam_mat, dist, viz, objs_pose, modelPts, cloudPts):
+def Publisher(model_pub, pose_pub, cam_mat, dist, viz, objs_pose, modelPts, cloudPts):
 
-        """ publish model cloud pints """
-        header = std_msgs.msg.Header()
-        header.stamp = rospy.Time.now()
-        header.frame_id = "camera_depth_optical_frame"
+    """ publish model cloud pints """
+    header = std_msgs.msg.Header()
+    header.stamp = rospy.Time.now()
+    header.frame_id = "camera_depth_optical_frame"
 
-        """ publish pose to ros-msg """
-        poses = objs_pose
+    """ publish pose to ros-msg """
+    poses = objs_pose
+
+    if poses is not None:
         pose2msg = Pose()
         pose_array = PoseArray()
         pose_array.header.stamp = rospy.Time.now()
         pose_array.header.frame_id = "camera_color_optical_frame"
+        print("total onigiri(s) found", len(poses))
+        for p in range(len(poses)):
+            print(str(p), poses[p])
+            pose2msg.position.x = poses[p]['tx']
+            pose2msg.position.y = poses[p]['ty']
+            pose2msg.position.z = poses[p]['tz']
+            pose2msg.orientation.w = poses[p]['qw']
+            pose2msg.orientation.x = poses[p]['qx']
+            pose2msg.orientation.y = poses[p]['qy']
+            pose2msg.orientation.z = poses[p]['qz']
+            pose_array.poses.append(pose2msg)
 
-        """ subscribe to pose in camera_color_optical_frame  """
-        getPose = pa.poses
-        header = pa.header
-        # getRosPos = []
-        # getRosQuat = []
-        pos = np.zeros(3)
-        quat = np.zeros(4)
+            #offset to align with obj-center
+            objC = np.array([-0.01, 0.05, 0.])
+            initRot = rotation_matrix(-m.pi, [0, 1, 0])
 
-        if poses is not None:
+            pos = np.array([poses[p]['tx'], poses[p]['ty'], poses[p]['tz']])
+            pos =  pos + objC
+            q2rot = quaternion_matrix([poses[p]['qw'], poses[p]['qx'], poses[p]['qy'], poses[p]['qz']])
+            # q2rot = concatenate_matrices(initRot, q2rot.T)
+            """ transform modelPoints w.r.t estimated pose """
+            modelPts = np.dot(modelPts, q2rot[0:3, 0:3])
+            modelPts = np.add(modelPts, pos)
 
-            print("total onigiri(s) found", len(poses))
-            for p in range(len(poses)):
-                # print(str(p), poses[p])
-                pose2msg.position.x = poses[p]['tx']
-                pose2msg.position.y = poses[p]['ty']
-                pose2msg.position.z = poses[p]['tz']
-                pose2msg.orientation.w = poses[p]['qw']
-                pose2msg.orientation.x = poses[p]['qx']
-                pose2msg.orientation.y = poses[p]['qy']
-                pose2msg.orientation.z = poses[p]['qz']
-                pose_array.poses.append(pose2msg)
+            """ send to ros """
+            scaled_cloud = pcl2.create_cloud_xyz32(header, modelPts)
+            model_pub.publish(scaled_cloud)
 
+            """ publish/visualize pose """
+            if viz is not None:
+                imgpts_cloud,_ = cv2.projectPoints(modelPts, np.identity(3), np.array([0.,0.,0.]), cam_mat, dist)
+                vizPnP = draw_pointCloud(viz, imgpts_cloud, [0,255,0]) # modelPts
+                draw_axis(viz, q2rot[0:3, 0:3], pos, cam_mat)
+                modelPts = np.zeros(shape=modelPts.shape)
+            cv2.imshow("posePnP", cv2.cvtColor(vizPnP, cv2.COLOR_BGR2RGB))
+            cv2.waitKey(1), #cv2.moveWindow('posePnP', 0, 0)
 
-                # TODO:
-                # print(header.seq)
-                # pos[0] = getPose[p].position.x
-                # pos[1] = getPose[p].position.y
-                # pos[2] = getPose[p].position.z
-                # quat[0] = getPose[p].orientation.x
-                # quat[1] = getPose[p].orientation.y
-                # quat[2] = getPose[p].orientation.z
-                # quat[3] = getPose[p].orientation.w
+            print(f"{Fore.RED} poseArray{Style.RESET_ALL}", pose_array.poses[p])
+        pose_pub.publish(pose_array)
 
-
-                #offset to align with obj-center
-                objC = np.array([-0.01, 0.05, 0.])
-                initRot = rotation_matrix(-m.pi, [0, 1, 0])
-
-                pos = np.array([poses[p]['tx'], poses[p]['ty'], poses[p]['tz']])
-                pos =  pos + objC
-                q2rot = quaternion_matrix([poses[p]['qw'], poses[p]['qx'], poses[p]['qy'], poses[p]['qz']])
-                # q2rot = concatenate_matrices(initRot, q2rot.T)
-
-                """ transform modelPoints w.r.t estimated pose """
-                modelPts = np.dot(modelPts, q2rot[0:3, 0:3])
-                modelPts = np.add(modelPts, pos)
-
-                """ send to ros """
-                scaled_cloud = pcl2.create_cloud_xyz32(header, modelPts)
-                model_pub.publish(scaled_cloud)
-
-                """ publish/visualize pose """
-                if viz is not None:
-                    imgpts_cloud,_ = cv2.projectPoints(modelPts, np.identity(3), np.array([0.,0.,0.]), cam_mat, dist)
-                    vizPnP = draw_pointCloud(viz, imgpts_cloud, [0,255,0]) # modelPts
-                    draw_axis(viz, q2rot[0:3, 0:3], pos, cam_mat)
-                    modelPts = np.zeros(shape=modelPts.shape)
-                cv2.imshow("posePnP", cv2.cvtColor(vizPnP, cv2.COLOR_BGR2RGB))
-                cv2.waitKey(1), #cv2.moveWindow('posePnP', 0, 0)
-
-                # getRosPos.append(pos)
-                # getRosQuat.append(quat)
-
-            pose_pub.publish(pose_array)
-        else:
-            print(f"{Fore.RED}no onigiri detected{Style.RESET_ALL}")
-
-
+    else:
+        print(f"{Fore.RED}no onigiri detected{Style.RESET_ALL}")

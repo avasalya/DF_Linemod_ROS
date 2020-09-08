@@ -153,10 +153,6 @@ class DenseFusion:
 
     def callback(self, rgb, depth):
 
-        # print ('received depth image of type: ' + depth.encoding)
-        # print ('received rgb image of type: ' + rgb.encoding)
-
-        #https://answers.ros.org/question/64318/how-do-i-convert-an-ros-image-into-a-numpy-array/
         depth = np.frombuffer(depth.data, dtype=np.uint16).reshape(depth.height, depth.width, -1)
         rgb = np.frombuffer(rgb.data, dtype=np.uint8).reshape(rgb.height, rgb.width, -1)
 
@@ -168,8 +164,8 @@ class DenseFusion:
             self.modelPts = np.asarray(mesh_model.vertices) * 0.01 #change units
             self.modelPts = self.modelPts[randomIndices, :]
 
-            Publisher(self.model_pub, self.pose_pub, self.pose_sub, self.poseArray,
-                    cam_mat, dist, self.viz, self.objs_pose, self.modelPts, self.cloudPts)
+            Publisher(self.model_pub, self.pose_pub, cam_mat, dist,
+                    self.viz, self.objs_pose, self.modelPts, self.cloudPts)
 
         except rospy.ROSException:
             print(f'{Fore.RED}ROS Intruptted')
