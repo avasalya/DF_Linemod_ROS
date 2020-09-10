@@ -1,4 +1,5 @@
 import os
+import sys
 import math as m
 import cv2 as cv2
 import numpy as np
@@ -183,6 +184,7 @@ def Publisher(model_pub, pose_pub, cam_mat, dist, viz, objs_pose, modelPts, clou
             pos =  pos + objC
             q2rot = quaternion_matrix([poses[p]['qw'], poses[p]['qx'], poses[p]['qy'], poses[p]['qz']])
             # q2rot = concatenate_matrices(initRot, q2rot.T)
+
             """ transform modelPoints w.r.t estimated pose """
             modelPts = np.dot(modelPts, q2rot[0:3, 0:3])
             modelPts = np.add(modelPts, pos)
@@ -198,7 +200,14 @@ def Publisher(model_pub, pose_pub, cam_mat, dist, viz, objs_pose, modelPts, clou
                 draw_axis(viz, q2rot[0:3, 0:3], pos, cam_mat)
                 modelPts = np.zeros(shape=modelPts.shape)
             cv2.imshow("posePnP", cv2.cvtColor(vizPnP, cv2.COLOR_BGR2RGB))
-            cv2.waitKey(1), #cv2.moveWindow('posePnP', 0, 0)
+            # cv2.waitKey(1), #cv2.moveWindow('posePnP', 0, 0)
+            key = cv2.waitKey(1) & 0xFF
+            if  key == 27:
+                rospy.loginfo(f"{Fore.RED}stopping streaming...{Style.RESET_ALL}")
+                try:
+                    sys.exit(1)
+                except SystemExit:
+                    os._exit(0)
 
             print(f"{Fore.RED} poseArray{Style.RESET_ALL}", pose_array.poses[p])
         pose_pub.publish(pose_array)

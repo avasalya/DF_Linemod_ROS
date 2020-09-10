@@ -128,8 +128,8 @@ class DenseFusion:
         self.pose_pub = rospy.Publisher('/onigiriPose', PoseArray, queue_size = 30)
         self.pose_sub = rospy.Subscriber('/onigiriPose', PoseArray, self.poseCallback, queue_size = 30)
 
-        self.ts = message_filters.ApproximateTimeSynchronizer([rgb_sub, depth_sub], 30, 1)
-        # self.ts = message_filters.TimeSynchronizer([rgb_sub, depth_sub], 30)
+        # self.ts = message_filters.ApproximateTimeSynchronizer([rgb_sub, depth_sub], 30, 1)
+        self.ts = message_filters.TimeSynchronizer([rgb_sub, depth_sub], 15)
         self.ts.registerCallback(self.callback)
 
         self.cv_image = np.zeros((480, 640, 3), np.uint8)
@@ -397,10 +397,14 @@ def main():
     """ run DenseFusion """
     DenseFusion(mask_rcnn, pose, refiner, objId)
 
-    rospy.spin()
-    rate = rospy.Rate(1)
-    while not rospy.is_shutdown():
-        rate.sleep()
+    try:
+        rospy.spin()
+        rate = rospy.Rate(1)
+        while not rospy.is_shutdown():
+            rate.sleep()
+    except KeyboardInterrupt:
+        print ('Shutting down densefusion ROS node')
+    cv2.destroyAllWindows()
 
 if __name__ == '__main__':
     main()
