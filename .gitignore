@@ -8,7 +8,7 @@ seg_result/
 old-scripts/out/
 
 # C extensions
-*.so
+# *.so
 
 *.vscode/
 
