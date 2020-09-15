@@ -204,12 +204,12 @@ def Publisher(model_pub, pose_pub, cam_mat, dist, viz, objs_pose, modelPts, clou
 
             """ publish/visualize pose """
             if viz is not None:
-                imgpts_cloud,_ = cv2.projectPoints(modelPts, np.identity(3), np.array([0.,0.,0.]), cam_mat, dist)
+                imgpts_cloud,jac = cv2.projectPoints(modelPts, np.identity(3), np.array([0.,0.,0.]), cam_mat, dist)
                 vizPnP = draw_pointCloud(viz, imgpts_cloud, [0,255,0]) # modelPts
                 draw_axis(viz, q2rot[0:3, 0:3], pos, cam_mat)
                 modelPts = np.zeros(shape=modelPts.shape)
-            cv2.imshow("posePnP", cv2.cvtColor(vizPnP, cv2.COLOR_BGR2RGB))
-            # cv2.waitKey(1), #cv2.moveWindow('posePnP', 0, 0)
+                cv2.imshow("posePnP", cv2.cvtColor(vizPnP, cv2.COLOR_BGR2RGB))
+
             key = cv2.waitKey(1) & 0xFF
             if  key == 27:
                 rospy.loginfo(f"{Fore.RED}stopping streaming...{Style.RESET_ALL}")

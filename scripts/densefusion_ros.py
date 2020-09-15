@@ -1,6 +1,4 @@
 #! /usr/bin/env python3
-
-from __init__ import *
 from utils import *
 
 # clean terminal in the beginning
@@ -234,7 +232,7 @@ class DenseFusion:
             cmax = int(bbox[b,3])
 
             # visualize each masks
-            # cv2.imshow("mask", cv2.cvtColor(mask, cv2.COLOR_BGR2RGB)), cv2.waitKey(1)
+            # cv2.imshow("mask", mask[rmin : rmax, cmin : cmax]), cv2.waitKey(1)
 
             img = np.transpose(rgb_original, (0, 1, 2)) #CxHxW
             choose = mask[rmin : rmax, cmin : cmax].flatten().nonzero()[0]
@@ -253,6 +251,7 @@ class DenseFusion:
             depth_masked = self.depth[rmin:rmax, cmin:cmax].flatten()[choose][:, np.newaxis].astype(np.float32)
             xmap_masked = self.xmap[rmin:rmax, cmin:cmax].flatten()[choose][:, np.newaxis].astype(np.float32)
             ymap_masked = self.ymap[rmin:rmax, cmin:cmax].flatten()[choose][:, np.newaxis].astype(np.float32)
+
             choose = np.array([choose])
             choose = torch.LongTensor(choose.astype(np.int32))
 
@@ -262,6 +261,7 @@ class DenseFusion:
             pt1 = (xmap_masked - cam_cy) * pt2 / cam_fy
             cloud = np.concatenate((pt0, pt1, pt2), axis=1)
             cloud = cloud /1000
+
             points = torch.from_numpy(cloud.astype(np.float32))
 
             img_masked = img[:, rmin : rmax, cmin : cmax ]
@@ -269,8 +269,8 @@ class DenseFusion:
             idx = torch.LongTensor([self.object_index])
             img_ = Variable(img_).cuda().unsqueeze(0)
             points = Variable(points).cuda().unsqueeze(0)
-            choose = Variable(choose).cuda()#.unsqueeze(0)
-            idx = Variable(idx).cuda()#.unsqueeze(0)
+            choose = Variable(choose).cuda().unsqueeze(0)
+            idx = Variable(idx).cuda().unsqueeze(0)
 
             pred_r, pred_t, pred_c, emb = self.estimator(img_, points, choose, idx)
             pred_r = pred_r / torch.norm(pred_r, dim=2).view(1, num_points, 1)
@@ -306,7 +306,7 @@ class DenseFusion:
             # print('estimated rotation is\n:{0}'.format(mat_r))
 
             """ project depth point cloud """
-            imgpts_cloud,_ = cv2.projectPoints(np.dot(points.cpu().numpy(), mat_r), mat_r, my_t, cam_mat, dist)
+            imgpts_cloud, jac = cv2.projectPoints(np.dot(points.cpu().numpy(), mat_r), mat_r, my_t, cam_mat, dist)
             viz = draw_pointCloud(viz, imgpts_cloud, [255, 0, 0]) # cloudPts
             self.cloudPts = imgpts_cloud.reshape(500, 2)
 
