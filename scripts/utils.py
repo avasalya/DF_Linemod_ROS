@@ -1,12 +1,5 @@
 from __init__ import *
 
-global onlyOnce
-onlyOnce = True
-global initq2rot
-initq2rot = np.identity(4)
-
-t1 = time.time()
-
 def skew(R):
     return (0.5 * (R - R.T))
 
@@ -40,7 +33,7 @@ def pil2cv(image):
 
 def cv2pil(image):
     new_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-    new_image = Image.fromarray(new_image)
+    new_image = pImage.fromarray(new_image)
     return new_image
 
 """ adapted from DOPE """
@@ -63,7 +56,13 @@ def DrawDot(g_draw, point, pointColor, pointRadius):
                     outline=pointColor
                     )
 
-def draw_cube(tar, img, g_draw, color, cam_fx, cam_fy, cam_cx, cam_cy):
+def draw_cube(tar, img, g_draw, color, cam_mat):
+
+    cam_fx = cam_mat[0,0]
+    cam_cx = cam_mat[0,2]
+    cam_fy = cam_mat[1,1]
+    cam_cy = cam_mat[1,2]
+
     # pinhole camera model/ project the cubeoid on the image plane using camera intrinsics
     # u = fx * x/z + cx
     # v = fy * y/z + cy
@@ -77,15 +76,24 @@ def draw_cube(tar, img, g_draw, color, cam_fx, cam_fy, cam_cx, cam_cy):
     p6 = (int((tar[6][0]/ tar[6][2])*cam_fx + cam_cx),  int((tar[6][1]/ tar[6][2])*cam_fy + cam_cy))
     p7 = (int((tar[7][0]/ tar[7][2])*cam_fx + cam_cx),  int((tar[7][1]/ tar[7][2])*cam_fy + cam_cy))
 
+    """ PnP for refinement """
+    points2D = [list(p0), list(p1), list(p2), list(p3), list(p4), list(p5), list(p6), list(p7)]
+
+    pnpSolver = CuboidPNPSolver('txonigiri',
+                                camera_intrinsic_matrix = cam_mat,
+                                cuboid3d=Cuboid3d(size3d = [4., 4., 4.]))
+    location, quaternion, projected_points = pnpSolver.solve_pnp(points2D)
+    # rvec, tvec = cv2.solvePnPRefineVVS(self.modelPts, self.cloudPts, cam_mat, dist, rot_, my_t)
+
     points = []
-    points.append(tuple(p0))
-    points.append(tuple(p1))
-    points.append(tuple(p2))
-    points.append(tuple(p3))
-    points.append(tuple(p4))
-    points.append(tuple(p5))
-    points.append(tuple(p6))
-    points.append(tuple(p7))
+    points.append(tuple(projected_points[0]))
+    points.append(tuple(projected_points[1]))
+    points.append(tuple(projected_points[2]))
+    points.append(tuple(projected_points[3]))
+    points.append(tuple(projected_points[4]))
+    points.append(tuple(projected_points[5]))
+    points.append(tuple(projected_points[6]))
+    points.append(tuple(projected_points[7]))
 
     '''
     Draws cube with a thick solid line across
@@ -144,13 +152,9 @@ def draw_cube(tar, img, g_draw, color, cam_fx, cam_fy, cam_cx, cam_cy):
     # print(p0, p1, p2, p3, p4, p5, p6, p7)
     # cv2.rectangle(img, p0, p7, (0,0,255))
 
-    return p0, p7
+    return location, quaternion, projected_points
 
 def Publisher(model_pub, pose_pub, cam_mat, dist, viz, objs_pose, modelPts, cloudPts):
-
-    global onlyOnce
-    global initq2rot
-
 
     """ publish model cloud pints """
     header = std_msgs.msg.Header()
@@ -179,24 +183,13 @@ def Publisher(model_pub, pose_pub, cam_mat, dist, viz, objs_pose, modelPts, clou
 
             #offset to align with obj-center
             objC = np.array([-0.01, 0.05, 0.])
-            initRot = rotation_matrix(-m.pi, [0, 1, 0])
 
             pos = np.array([poses[p]['tx'], poses[p]['ty'], poses[p]['tz']])
             pos =  pos + objC
             q2rot = quaternion_matrix([poses[p]['qw'], poses[p]['qx'], poses[p]['qy'], poses[p]['qz']])
-            # q2rot = concatenate_matrices(initRot, q2rot.T)
-
-            t2 = time.time()
-            if onlyOnce is True:
-                initq2rot = quaternion_matrix([poses[p]['qw'], poses[p]['qx'], poses[p]['qy'], poses[p]['qz']])
-                if (t2 -t1) > 10:
-                    onlyOnce = False
-            else:
-                q2rot = np.dot(q2rot, initq2rot)
 
             """ transform modelPoints w.r.t estimated pose """
-            modelPts = np.dot(modelPts, q2rot[0:3, 0:3])
-            modelPts = np.add(modelPts, pos)
+            modelPts = np.dot(modelPts, q2rot[0:3, 0:3]) + pos
 
             """ send to ros """
             scaled_cloud = pcl2.create_cloud_xyz32(header, modelPts)

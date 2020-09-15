@@ -11,7 +11,7 @@ import random as rand
 import numpy.ma as ma
 from colorama import Fore, Style
 
-from PIL import Image
+import PIL.Image as pImage
 from PIL import ImageDraw
 
 import rospy
@@ -38,6 +38,9 @@ from lib.loss import Loss
 from lib.loss_refiner import Loss_refine
 from lib.network import PoseNet, PoseRefineNet
 from lib.transformations import quaternion_matrix, quaternion_from_matrix, rotation_matrix, concatenate_matrices, is_same_transform, is_same_quaternion, rotation_from_matrix
+
+from cuboid import Cuboid3d
+from cuboid_pnp_solver import CuboidPNPSolver
 
 
 

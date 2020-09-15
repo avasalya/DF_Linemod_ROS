@@ -11,7 +11,7 @@ else:
 
 # specify which gpu to use
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"]="1" # "0,1,2,3"
+os.environ["CUDA_VISIBLE_DEVICES"]="0" # "0,1,2,3"
 
 num_objects = 1
 num_points = 500
@@ -204,7 +204,7 @@ class DenseFusion:
         rgb_s = np.transpose(rgb, (2, 0, 1))
         self.rgb_s.append(rgb_s)
         mask, bbox, viz = self.draw_seg(self.batch_predict())
-        # cv2.imshow("rgb", cv2.cvtColor(viz, cv2.COLOR_BGR2RGB)), cv2.waitKey(1)
+        # cv2.imshow("maskrcnn", cv2.cvtColor(viz, cv2.COLOR_BGR2RGB)), cv2.waitKey(1)
 
         t2 = time.time()
         print(f'{Fore.YELLOW}mask-rcnn inference time is:{Style.RESET_ALL}', t2 - t1)
@@ -216,7 +216,6 @@ class DenseFusion:
         # convert img into tensor
         rgb_original = np.transpose(rgb, (2, 0, 1))
         norm = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-        # rgb = Variable(norm(torch.from_numpy(rgb.astype(np.float32)))).cuda()
 
         all_masks = []
         self.depth = depth.reshape(480, 640)
@@ -230,9 +229,6 @@ class DenseFusion:
             rmax = int(bbox[b,1])
             cmin = int(bbox[b,2])
             cmax = int(bbox[b,3])
-
-            # visualize each masks
-            # cv2.imshow("mask", mask[rmin : rmax, cmin : cmax]), cv2.waitKey(1)
 
             img = np.transpose(rgb_original, (0, 1, 2)) #CxHxW
             choose = mask[rmin : rmax, cmin : cmax].flatten().nonzero()[0]
@@ -284,12 +280,7 @@ class DenseFusion:
             my_pred = np.append(my_r, my_t)
 
             """ DF refiner NOTE: results are better without refiner """
-            # my_t, my_r = self.pose_refiner(1, my_t, my_r, points, emb, idx)
-
-            """ PnP for refinement """
-            rot_ = quaternion_matrix(my_r)[:3, :3]
-            rot_ = cv2.Rodrigues(rot_)[0]
-            # rvec, tvec = cv2.solvePnPRefineVVS(self.modelPts, self.cloudPts, cam_mat, dist, rot_, my_t)
+            # my_t, my_r = self.pose_refiner(1, my_t.T, my_r.T, points, emb, idx)
 
             """ get mean depth within a box as depth offset """
             depth = self.depth[rmin : rmax, cmin : cmax].astype(float)
@@ -321,18 +312,16 @@ class DenseFusion:
             mat_r = np.dot(mat_r.T, offR[:3, :3])
 
             """ transform 3D box and axis with estimated pose and Draw """
-            # target_df = np.dot(edges, mat_r)
-            # target_df = np.add(target_df, my_t)
+            # target_df = np.dot(edges, mat_r) + my_t
             # new_image = cv2pil(viz)
             # g_draw = ImageDraw.Draw(new_image)
-            # _,_ = draw_cube(target_df, viz, g_draw, (255, 255, 255), cam_fx, cam_fy, cam_cx, cam_cy)
+            # location, quaternion, projected_points = draw_cube(target_df, viz, g_draw, (255, 255, 255), cam_mat)
             # viz = pil2cv(new_image)
-            # draw_axis(viz, mat_r, my_t, cam_mat)
 
             """ convert pose to ros-msg """
             I = np.identity(4)
             I[0:3, 0:3] = mat_r
-            I[0:3, -1] = my_t
+            I[0:3, -1] = my_t# + np.asarray(location) *0.01 #cm2m
             rot = quaternion_from_matrix(I, True) #wxyz
             my_t = my_t.reshape(1,3)
             pose = {
