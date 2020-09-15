@@ -10,7 +10,11 @@
 * https://github.com/wkentaro/chainer-mask-rcnn
 
 ## create conda environment
-`conda env create -f environment.yml`
+* `conda env create -f environment.yml`
+* install following lib manually
+`open3d`,
+`rospkg`,
+`chainer_mask_rcn`
 
 ## install realsense ROS package
 * https://github.com/IntelRealSense/realsense-ros
