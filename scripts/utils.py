@@ -1,5 +1,6 @@
 import os
 import sys
+import time
 import math as m
 import cv2 as cv2
 import numpy as np
@@ -20,6 +21,13 @@ from lib.transformations import quaternion_matrix, rotation_matrix, concatenate_
 from PIL import Image
 from PIL import ImageDraw
 from colorama import Fore, Style
+
+global onlyOnce
+onlyOnce = True
+global initq2rot
+initq2rot = np.identity(4)
+
+t1 = time.time()
 
 def draw_axis(img, R, t, K):
     # How+to+draw+3D+Coordinate+Axes+with+OpenCV+for+face+pose+estimation%3f
@@ -151,6 +159,10 @@ def draw_cube(tar, img, g_draw, color, cam_fx, cam_fy, cam_cx, cam_cy):
 
 def Publisher(model_pub, pose_pub, cam_mat, dist, viz, objs_pose, modelPts, cloudPts):
 
+    global onlyOnce
+    global initq2rot
+
+
     """ publish model cloud pints """
     header = std_msgs.msg.Header()
     header.stamp = rospy.Time.now()
@@ -184,6 +196,14 @@ def Publisher(model_pub, pose_pub, cam_mat, dist, viz, objs_pose, modelPts, clou
             pos =  pos + objC
             q2rot = quaternion_matrix([poses[p]['qw'], poses[p]['qx'], poses[p]['qy'], poses[p]['qz']])
             # q2rot = concatenate_matrices(initRot, q2rot.T)
+
+            # t2 = time.time()
+            # if onlyOnce is True:
+            #     initq2rot = quaternion_matrix([poses[p]['qw'], poses[p]['qx'], poses[p]['qy'], poses[p]['qz']])
+            #     if (t2 -t1) > 20:
+            #         onlyOnce = False
+            # else:
+            #     q2rot = np.dot(q2rot, initq2rot)
 
             """ transform modelPoints w.r.t estimated pose """
             modelPts = np.dot(modelPts, q2rot[0:3, 0:3])

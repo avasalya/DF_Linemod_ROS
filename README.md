@@ -1,6 +1,6 @@
 # DF_Linemod_ROS
 **densefusion with ros using linemod format on custom dataset with chainer mask-rcnn for segmentation**
-* tested on Ubuntu 18.04, ROS Melodic, RTX 2080-Ti, CUDA 10.1, Python3.6.9, PyTorch 1.5.1
+* tested on Ubuntu 18.04, ROS Melodic, RTX 2080-Ti, CUDA 10.1, 10.2, Python3.6.9, PyTorch 1.5.1
 * refer `environment.yml` for other anaconda packages
 * git clone in your catkin_ws https://github.com/avasalya/DF_Linemod_ROS.git
 

@@ -235,6 +235,7 @@ class DenseFusion:
         obj_pose = []
         print(f"{Fore.GREEN}estimating pose..{Style.RESET_ALL}")
 
+        """ mask rcnn """
         self.rgb_s = []
         rgb_s = np.transpose(rgb, (2, 0, 1))
         self.rgb_s.append(rgb_s)
@@ -251,7 +252,7 @@ class DenseFusion:
         # convert img into tensor
         rgb_original = np.transpose(rgb, (2, 0, 1))
         norm = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-        rgb = Variable(norm(torch.from_numpy(rgb.astype(np.float32)))).cuda()
+        # rgb = Variable(norm(torch.from_numpy(rgb.astype(np.float32)))).cuda()
 
         all_masks = []
         self.depth = depth.reshape(480, 640)
@@ -350,8 +351,8 @@ class DenseFusion:
             Rx = rotation_matrix(2*m.pi/3, [1, 0, 0], my_t)
             Ry = rotation_matrix(10*m.pi/180, [0, 1, 0], my_t)
             Rz = rotation_matrix(5*m.pi/180, [0, 0, 1], my_t)
-            R = concatenate_matrices(Rx, Ry, Rz)[:3,:3]
-            mat_r = np.dot(mat_r.T, R[:3, :3])
+            offR = concatenate_matrices(Rx, Ry, Rz)[:3,:3]
+            mat_r = np.dot(mat_r.T, offR[:3, :3])
 
             """ transform 3D box and axis with estimated pose and Draw """
             # target_df = np.dot(edges, mat_r)
