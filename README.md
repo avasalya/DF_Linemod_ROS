@@ -23,13 +23,13 @@
 * `roslaunch realsense2_camera rs_rgbd.launch align_depth:=true`
 
 ### 2. launch rviz along with publisher/subscriber services
-* change intrinsic parameters as per your camera at line #98 onwards
+* change intrinsic parameters as per your camera from line #98 onwards
     [***cam_fx***, ***cam_fy***, ***cam_cx***, ***cam_cy***](https://github.com/avasalya/DF_Linemod_ROS/blob/c36b0f4527e654d176c0d4bce205f6bc8701ced4/scripts/densefusion_ros.py#L98)
 * `roslaunch densefusion_ros densefusion.launch`
 *  it publishes estimated pose as geometry_msgs/PoseArray and sensor_msgs/pointCloud2
 *  also possible via
     * `rosrun densefusion_ros densefusion_ros.py` or
-    * `./scripts/eval.sh` or 
+    * `./scripts/eval.sh` or
     * `python3 densefusion_ros.py`
 
 
