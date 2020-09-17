@@ -1,37 +1,7 @@
 #%%
-import os
-import sys
-import cv2
-import copy
-import time
-import getpass
-import argparse
-import math as m
-import numpy as np
-import numpy.ma as ma
-import matplotlib.pyplot as plt
-
-import glob
-
-from colorama import Fore, Style
-from helperFunc import *
-
+#! /usr/bin/env python3
+from utils import *
 import pyrealsense2 as rs
-
-import chainer
-import chainer.utils as utils
-import chainer_mask_rcnn as cmr
-
-import torch
-import torchvision
-from torchvision import transforms
-from torch.autograd import Variable
-
-from lib.loss import Loss
-from lib.loss_refiner import Loss_refine
-from lib.knn.__init__ import KNearestNeighbor
-from lib.network import PoseNet, PoseRefineNet
-from lib.transformations import quaternion_matrix, quaternion_from_matrix, rotation_matrix, concatenate_matrices, is_same_transform, is_same_quaternion, rotation_from_matrix
 
 # clean terminal in the beginning
 username = getpass.getuser()
@@ -43,15 +13,14 @@ else:
 
 # specify which gpu to use
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"]="0,1" # "0,1,2,3"
+os.environ["CUDA_VISIBLE_DEVICES"]="1" # "0,1,2,3"
 
 num_objects = 1
-num_points = 500
+num_points = 100
 
 path = os.path.dirname(__file__)
 
 pretrained_model = os.path.join(path + '/../txonigiri/', 'snapshot_model.npz')
-# pretrained_model = os.path.join(path + '/txonigiri/', 'snapshot_model.npz')
 pooling_func = cmr.functions.roi_align_2d
 mask_rcnn = cmr.models.MaskRCNNResNet(
             n_layers=50,
@@ -72,20 +41,50 @@ print('maskrcnn model loaded %s' % pretrained_model)
 pose = PoseNet(num_points, num_objects)
 pose.cuda()
 pose.load_state_dict(torch.load(path + '/../txonigiri/pose_model.pth'))
-# pose.load_state_dict(torch.load(path + '/txonigiri/pose_model.pth'))
 pose.eval()
-print("pose_model loaded...")
+print("pose model loaded...")
 
 refiner = PoseRefineNet(num_points, num_objects)
 refiner.cuda()
 refiner.load_state_dict(torch.load(path + '/../txonigiri/pose_refine_model.pth'))
-# refiner.load_state_dict(torch.load(path + '/txonigiri/pose_refine_model.pth'))
 refiner.eval()
-print("pose_refine_model loaded...")
+print("pose refine model loaded...")
+
+filepath = (path + '/../txonigiri/txonigiri.ply')
+mesh_model = o3d.io.read_triangle_mesh(filepath)
+randomIndices = rand.sample(range(0, 9958), num_points)
+print("object mesh model loaded...")
+
+bs = 1
+objId = 0
+objlist =[1]
+mm2m = 0.001
+class_names = ['txonigiri']
+
+# cam @ aist
+cam_fx = 605.286
+cam_cx = 320.075
+cam_fy = 605.699
+cam_cy = 247.877
+
+dist = np.array([0.0, 0.0, 0.0, 0.0, 0.0])
+cam_mat = np.matrix([ [cam_fx, 0, cam_cx], [0, cam_fy, cam_cy], [0, 0, 1] ])
+
+edge = 60.
+edge = edge * mm2m
+edges  = np.array([
+                [edge, -edge*.5,  edge],
+                [edge, -edge*.5, -edge],
+                [edge,  edge*.5, -edge],
+                [edge,  edge*.5,  edge],
+                [-edge,-edge*.5,  edge],
+                [-edge,-edge*.5, -edge],
+                [-edge, edge*.5, -edge],
+                [-edge, edge*.5,  edge]])
 
 #%%
 
-class pose_estimation:
+class DenseFusion:
 
     def __init__(self, mask_rcnn, pose, refiner, object_index_, rgb, depth):
 
@@ -102,8 +101,24 @@ class pose_estimation:
         self.refiner = refiner
         self.object_index = object_index_
 
+        """ publisher / subscriber """
+        self.model_pub = rospy.Publisher("/onigiriCloud", PointCloud2, queue_size=30)
+        self.pose_pub = rospy.Publisher('/onigiriPose', PoseArray, queue_size = 30)
+        self.pose_sub = rospy.Subscriber('/onigiriPose', PoseArray, self.poseCallback, queue_size = 30)
+
+        self.viz = np.zeros((480, 640, 3), np.uint8)
+        self.objs_pose = None
+        self.cloudPts = None
+        self.poseArray = PoseArray()
+
+        self.modelPts = np.asarray(mesh_model.vertices) * 0.01 #change units
+        self.modelPts = self.modelPts[randomIndices, :]
+
         self.xmap = np.array([[j for i in range(640)] for j in range(480)])
         self.ymap = np.array([[i for i in range(640)] for j in range(480)])
+
+    def poseCallback(self, poseArray):
+        self.poseArray = poseArray
 
     def batch_predict(self):
 
@@ -166,10 +181,18 @@ class pose_estimation:
 
         return my_t, my_r
 
-    def pose(self):
+    def pose_estimator(self):
 
+        t1 = time.time()
+        obj_pose = []
+        print(f"{Fore.GREEN}estimating pose..{Style.RESET_ALL}")
+
+        """ mask rcnn """
         mask, bbox, viz = self.draw_seg(self.batch_predict())
         # cv2.imshow("mask", cv2.cvtColor(viz, cv2.COLOR_BGR2RGB)), cv2.moveWindow('mask', 0, 500)
+
+        t2 = time.time()
+        print(f'{Fore.YELLOW}mask-rcnn inference time is:{Style.RESET_ALL}', t2 - t1)
 
         pred = mask
         pred = pred *255
@@ -178,9 +201,9 @@ class pose_estimation:
         # convert img into tensor
         rgb_original = self.rgb
         norm = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-        self.rgb = Variable(norm(torch.from_numpy(self.rgb.astype(np.float32)))).cuda()
 
         all_masks = []
+        # self.depth = depth.reshape(480, 640)
         mask_depth = ma.getmaskarray(ma.masked_not_equal(self.depth, 0))
         mask_label = ma.getmaskarray(ma.masked_equal(pred, np.array(255)))
 
@@ -192,9 +215,6 @@ class pose_estimation:
             rmax = int(bbox[b,1])
             cmin = int(bbox[b,2])
             cmax = int(bbox[b,3])
-
-            # visualize each masks
-            # plt.imshow(mask), plt.show()
 
             img = np.transpose(rgb_original, (0, 1, 2)) #CxHxW
             choose = mask[rmin : rmax, cmin : cmax].flatten().nonzero()[0]
@@ -213,6 +233,7 @@ class pose_estimation:
             depth_masked = self.depth[rmin:rmax, cmin:cmax].flatten()[choose][:, np.newaxis].astype(np.float32)
             xmap_masked = self.xmap[rmin:rmax, cmin:cmax].flatten()[choose][:, np.newaxis].astype(np.float32)
             ymap_masked = self.ymap[rmin:rmax, cmin:cmax].flatten()[choose][:, np.newaxis].astype(np.float32)
+
             choose = np.array([choose])
             choose = torch.LongTensor(choose.astype(np.int32))
 
@@ -229,25 +250,22 @@ class pose_estimation:
             idx = torch.LongTensor([self.object_index])
             img_ = Variable(img_).cuda().unsqueeze(0)
             points = Variable(points).cuda().unsqueeze(0)
-            choose = Variable(choose).cuda()#.unsqueeze(0)
-            idx = Variable(idx).cuda()#.unsqueeze(0)
+            choose = Variable(choose).cuda().unsqueeze(0)
+            idx = Variable(idx).cuda().unsqueeze(0)
 
             pred_r, pred_t, pred_c, emb = self.estimator(img_, points, choose, idx)
             pred_r = pred_r / torch.norm(pred_r, dim=2).view(1, num_points, 1)
             pred_c = pred_c.view(bs, num_points)
             how_max, which_max = torch.max(pred_c, 1) #1
             pred_t = pred_t.view(bs * num_points, 1, 3)
-
             # print("max confidence", how_max)
 
             my_r = pred_r[0][which_max[0]].view(-1).cpu().data.numpy()
             my_t = (points.view(bs * num_points, 1, 3) + pred_t)[which_max[0]].view(-1).cpu().data.numpy()
             my_pred = np.append(my_r, my_t)
 
-            # DF refiner ---results are better without refiner
-            # my_t, my_r = self.pose_refiner(3, my_t, my_r, points, emb, idx)
-
-#TODO  use cv.solvePnP or ICP
+            """ DF refiner NOTE: results are better without refiner """
+            # my_t, my_r = self.pose_refiner(1, my_t.T, my_r.T, points, emb, idx)
 
             """ get mean depth within a box as depth offset """
             depth = self.depth[rmin : rmax, cmin : cmax].astype(float)
@@ -256,11 +274,8 @@ class pose_estimation:
 
             """ position mm2m """
             my_t = np.array(my_t*mm2m)
-            # my_t[2] = dep # use this to get depth of obj centroid
-            # my_t[1] = my_t[1] + 0.05
-            # my_t[0] = my_t[0] + 0.05
-
-            print("Pos xyz:{0}".format(my_t))
+            my_t[2] = dep #NOTE: use this to get depth of obj centroid
+            # print("Pos xyz:{0}".format(my_t))
 
             """ rotation """
             mat_r = quaternion_matrix(my_r)[:3, :3]
@@ -268,95 +283,57 @@ class pose_estimation:
 
             """ project point cloud """
             imgpts_cloud,_ = cv2.projectPoints(np.dot(points.cpu().numpy(), mat_r), mat_r, my_t, cam_mat, dist)
-            viz = draw_cloudPts(viz, imgpts_cloud, 1)
+            viz = draw_pointCloud(viz, imgpts_cloud, [255, 0, 0])
+            self.cloudPts = imgpts_cloud.reshape(num_points, 2)
 
             """ draw cmr 2D box """
             cv2.rectangle(viz, (cmax, cmin), (rmax, rmin), (255,0,0))
-
-            """ add estimated position and Draw 3D box, axis """
-            # target_cam = np.add(edges, my_t)
-            # new_image = cv2pil(viz)
-            # g_draw = ImageDraw.Draw(new_image)
-            # p0, p7 = draw_cube(target_cam, viz, g_draw, (255, 165, 0), cam_fx, cam_fy, cam_cx, cam_cy)
-            # viz = pil2cv(new_image)
-            # draw_axis(viz, np.eye(3), my_t, cam_mat)
-
-            """ align 2d bbox with 3D box face """
-            # cv2.rectangle(viz, p0, p7, (0,0,255))
 
             """ introduce offset in Rot """
             Rx = rotation_matrix(2*m.pi/3, [1, 0, 0], my_t)
             Ry = rotation_matrix(10*m.pi/180, [0, 1, 0], my_t)
             Rz = rotation_matrix(5*m.pi/180, [0, 0, 1], my_t)
-            R = concatenate_matrices(Rx, Ry, Rz)[:3,:3]
-            mat_r = np.dot(mat_r.T, R[:3, :3])
-
-
-            # h, status = cv2.findHomography(cloud, np.dot(points.cpu().numpy(), mat_r))
+            offR = concatenate_matrices(Rx, Ry, Rz)[:3,:3]
+            mat_r = np.dot(mat_r.T, offR[:3, :3])
 
             """ transform 3D box and axis with estimated pose and Draw """
-            target_df = np.dot(edges, mat_r)
-            target_df = np.add(target_df, my_t)
-            new_image = cv2pil(viz)
-            g_draw = ImageDraw.Draw(new_image)
-            _,_ = draw_cube(target_df, viz, g_draw, (255, 255, 255), cam_fx, cam_fy, cam_cx, cam_cy)
-            viz = pil2cv(new_image)
-            draw_axis(viz, mat_r, my_t, cam_mat)
+            # target_df = np.dot(edges, mat_r) + my_t
+            # new_image = cv2pil(viz)
+            # g_draw = ImageDraw.Draw(new_image)
+            # location, quaternion, projected_points = draw_cube(target_df, viz, g_draw, (255, 255, 255), cam_mat)
+            # viz = pil2cv(new_image)
 
-            """ viz pred pose  """
-            cv2.imshow("pose", cv2.cvtColor(viz, cv2.COLOR_BGR2RGB))
-            cv2.moveWindow('pose', 0, 0)
+            """ convert pose to ros-msg """
+            I = np.identity(4)
+            I[0:3, 0:3] = mat_r
+            I[0:3, -1] = my_t# + np.asarray(location) *0.01 #cm2m
+            rot = quaternion_from_matrix(I, True) #wxyz
+            my_t = my_t.reshape(1,3)
+            pose = {
+                    'tx':my_t[0][0],
+                    'ty':my_t[0][1],
+                    'tz':my_t[0][2],
+                    'qw':rot[0],
+                    'qx':rot[1],
+                    'qy':rot[2],
+                    'qz':rot[3]}
 
+            obj_pose.append(pose)
+            self.viz = viz
         else:
-            if len(bbox) <= 1:
+            if len(bbox) < 1:
                 print(f"{Fore.RED}unable to detect pose..{Style.RESET_ALL}")
-        return viz
+
+        self.objs_pose = obj_pose
+
+        t3 = time.time()
+        print(f'{Fore.YELLOW}DenseFusion inference time is:{Style.RESET_ALL}', t3 - t2)
 
 
-if __name__ == '__main__':
-
-    autostop = 1000
-
-    bs = 1
-    objId = 0
-    objlist =[1]
-    mm2m = 0.001
-    class_names = ['txonigiri']
-
-    # cam @ aist
-    cam_fx = 605.286
-    cam_cx = 320.075
-    cam_fy = 605.699
-    cam_cy = 247.877
-
-    dist = np.array([0.0, 0.0, 0.0, 0.0, 0.0])
-    cam_mat = np.matrix([ [cam_fx, 0, cam_cx], [0, cam_fy, cam_cy], [0, 0, 1] ])
-
-    edge = 70.
-    edge = edge * mm2m
-
-    edges  = np.array([
-                    [edge, -edge*.5,  edge],
-                    [edge, -edge*.5, -edge],
-                    [edge,  edge*.5, -edge],
-                    [edge,  edge*.5,  edge],
-                    [-edge,-edge*.5,  edge],
-                    [-edge,-edge*.5, -edge],
-                    [-edge, edge*.5, -edge],
-                    [-edge, edge*.5,  edge]])
-
-    # Stream (Color/Depth) settings
-    config = rs.config()
-    config.enable_stream(rs.stream.color, 640 , 480 , rs.format.bgr8, 60)
-    config.enable_stream(rs.stream.depth, 640 , 480 , rs.format.z16, 60)
-
-    # Start streaming
-    pipeline = rs.pipeline()
-    profile = pipeline.start(config)
-
-    t0 = time.time()
-
+def main():
     try:
+        rospy.init_node('onigiriPose', anonymous=False)
+        rospy.loginfo('streaming now...')
         while True:
 
             t1 = time.time()
@@ -369,14 +346,36 @@ if __name__ == '__main__':
             if  not depth_frame or  not color_frame:
                 raise ValueError('No image found, camera not streaming?')
 
-            # color image
+            """ color image """
             rgb = np.asanyarray(color_frame.get_data())
             rgb = cv2.cvtColor(rgb, cv2.COLOR_BGR2RGB)
 
-            # Depth image
+            """ Depth image """
             depth = np.asanyarray(depth_frame.get_data())
 
-            # merge depth with rgb
+            """ point cloud """
+            # pc = rs.pointcloud()
+            # pointcloud = rs.points()
+            # pc.map_to(color_frame)
+            # pointcloud = pc.calculate(depth_frame)
+            # print(pointcloud.get_vertices())
+
+            # intr = profile.get_stream(rs.stream.color).as_video_stream_profile().get_intrinsics()
+            # pinhole_camera_intrinsic = o3d.camera.PinholeCameraIntrinsic(intr.width, intr.height, intr.fx, intr.fy, intr.ppx, intr.ppy)
+
+            # img = o3d.geometry.Image(rgb.astype(np.uint8))
+            # dep = o3d.geometry.Image(np.asarray(depth).astype(np.float32))
+            # rgbd = o3d.geometry.RGBDImage.create_from_color_and_depth(img, dep)
+
+            # pointcloud = o3d.geometry.PointCloud.create_from_rgbd_image(rgbd, pinhole_camera_intrinsic)
+
+            # o3d.visualization.draw_geometries([pointcloud], zoom=0.3412,
+            #                                 front=[0.4257, -0.2125, -0.8795],
+            #                                 lookat=[2.6172, 2.0475, 1.532],
+            #                                 up=[-0.0694, -0.9768, 0.2024])
+
+
+            """ merge depth with rgb NOTE:testing some feature -- not ready """
             gray_color = 153
             clipping_distance = 1 / mm2m # in mm
             depth_image_3d = np.dstack((depth, depth, depth))
@@ -385,9 +384,13 @@ if __name__ == '__main__':
             images = np.hstack((bg_removed, depth_colormap))
             # cv2.imshow("merged rgbd", cv2.cvtColor(images, cv2.COLOR_BGR2RGB))
 
-            # DF pose estimation
-            pe = pose_estimation(mask_rcnn, pose, refiner, objId, rgb, depth)
-            pe.pose()
+            """ run DenseFusion """
+            df = DenseFusion(mask_rcnn, pose, refiner, objId, rgb, depth)
+            df.pose_estimator()
+
+            """ publish to ros """
+            Publisher(df.model_pub, df.pose_pub, cam_mat, dist,
+                    df.viz, df.objs_pose, df.modelPts, df.cloudPts)
 
             t2 = time.time()
             print('inference time is :{0}'.format(t2 - t1))
@@ -403,4 +406,21 @@ if __name__ == '__main__':
     finally:
         pipeline.stop()
         cv2.destroyAllWindows()
+
+if __name__ == '__main__':
+
+    # Stream (Color/Depth) settings
+    config = rs.config()
+    config.enable_stream(rs.stream.color, 640 , 480 , rs.format.bgr8, 60)
+    config.enable_stream(rs.stream.depth, 640 , 480 , rs.format.z16, 60)
+
+    # Start streaming
+    pipeline = rs.pipeline()
+    profile = pipeline.start(config)
+
+    t0 = time.time()
+
+    autostop = 1000
+
+    main()
 # %%

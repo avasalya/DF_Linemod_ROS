@@ -14,7 +14,7 @@ os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
 os.environ["CUDA_VISIBLE_DEVICES"]="0" # "0,1,2,3"
 
 num_objects = 1
-num_points = 500
+num_points = 100
 
 path = os.path.dirname(__file__)
 
@@ -50,7 +50,7 @@ print("pose refine model loaded...")
 
 filepath = (path + '/../txonigiri/txonigiri.ply')
 mesh_model = o3d.io.read_triangle_mesh(filepath)
-randomIndices = rand.sample(range(0, 9958), 500)
+randomIndices = rand.sample(range(0, 9958), num_points)
 print("object mesh model loaded...")
 
 bs = 1
@@ -70,7 +70,6 @@ cam_mat = np.matrix([ [cam_fx, 0, cam_cx], [0, cam_fy, cam_cy], [0, 0, 1] ])
 
 edge = 60.
 edge = edge * mm2m
-
 edges  = np.array([
                 [edge, -edge*.5,  edge],
                 [edge, -edge*.5, -edge],
@@ -96,11 +95,10 @@ class DenseFusion:
         self.ts = message_filters.TimeSynchronizer([rgb_sub, depth_sub], 15)
         self.ts.registerCallback(self.callback)
 
-        self.cv_image = np.zeros((480, 640, 3), np.uint8)
-        self.cv_depth = np.zeros((480, 640, 1), np.uint8)
+        # self.cv_image = np.zeros((480, 640, 3), np.uint8)
+        # self.cv_depth = np.zeros((480, 640, 1), np.uint8)
         self.viz = np.zeros((480, 640, 3), np.uint8)
         self.objs_pose = None
-        self.modelPts = None
         self.cloudPts = None
         self.poseArray = PoseArray()
 
@@ -108,6 +106,9 @@ class DenseFusion:
         self.estimator = pose
         self.refiner = refiner
         self.object_index = object_index_
+
+        self.modelPts = np.asarray(mesh_model.vertices) * 0.01 #change units
+        self.modelPts = self.modelPts[randomIndices, :]
 
         self.xmap = np.array([[j for i in range(640)] for j in range(480)])
         self.ymap = np.array([[i for i in range(640)] for j in range(480)])
@@ -125,9 +126,6 @@ class DenseFusion:
             self.pose_estimator(rgb, depth)
 
             """ publish to ros """
-            self.modelPts = np.asarray(mesh_model.vertices) * 0.01 #change units
-            self.modelPts = self.modelPts[randomIndices, :]
-
             Publisher(self.model_pub, self.pose_pub, cam_mat, dist,
                     self.viz, self.objs_pose, self.modelPts, self.cloudPts)
 
@@ -222,6 +220,7 @@ class DenseFusion:
         mask_depth = ma.getmaskarray(ma.masked_not_equal(self.depth, 0))
         mask_label = ma.getmaskarray(ma.masked_equal(pred, np.array(255)))
 
+        # iterate through detected masks
         for b in range(len(bbox)):
 
             mask = mask_depth * mask_label[:,:,b]
@@ -257,7 +256,6 @@ class DenseFusion:
             pt1 = (xmap_masked - cam_cy) * pt2 / cam_fy
             cloud = np.concatenate((pt0, pt1, pt2), axis=1)
             cloud = cloud /1000
-
             points = torch.from_numpy(cloud.astype(np.float32))
 
             img_masked = img[:, rmin : rmax, cmin : cmax ]
@@ -299,7 +297,7 @@ class DenseFusion:
             """ project depth point cloud """
             imgpts_cloud, jac = cv2.projectPoints(np.dot(points.cpu().numpy(), mat_r), mat_r, my_t, cam_mat, dist)
             viz = draw_pointCloud(viz, imgpts_cloud, [255, 0, 0]) # cloudPts
-            self.cloudPts = imgpts_cloud.reshape(500, 2)
+            self.cloudPts = imgpts_cloud.reshape(num_points, 2)
 
             """ draw cmr 2D box """
             cv2.rectangle(viz, (cmax, cmin), (rmax, rmin), (255,0,0))

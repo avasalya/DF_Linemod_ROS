@@ -14,13 +14,16 @@
 * install following lib manually
 `open3d`,
 `rospkg`,
-`chainer_mask_rcn`
+`chainer_mask_rcn`,
+`pyrealsense2`
 
 ## install realsense ROS package
 * https://github.com/IntelRealSense/realsense-ros
 
 ## download and unzip `txonigiri` folder containing weights
 * https://www.dropbox.com/sh/wkmqd0w1tvo4592/AADWt9j5SjiklJ5X0dpsSILAa?dl=0
+
+<br />
 
 # with ROS
 ### 1. launch camera
@@ -36,11 +39,15 @@
     * `./scripts/eval.sh` or
     * `python3 densefusion_ros.py`
 
+<br />
+
+# publish pose/pointCloud on ROS with `pyrealsense2` pkg
+### 1. run `roscore`
+### 2. `python3 densefusion_cam.py`
+### 3. launch rviz `roslaunch densefusion_ros densefusion_cam.launch` (rgbd cloud not working YET!)
 
 
-# without ROS [not updated]
-## Test with realsense D435
-`python3 densefusion_cam.py`
+<br />
 
-## Test with rgbd images
+# Test with rgbd images [not updated]
 `python3 densefusion_img.py`
