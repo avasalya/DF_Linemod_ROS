@@ -6,7 +6,7 @@
 	<!-- https://answers.ros.org/question/263715/fixed-frame-map-does-not-exist/ -->
 
     <!-- x y z qx qy qz qw frame_id child_frame_id period_in_ms -->
-    <node pkg="tf" type="static_transform_publisher" name="robot2cam" args="0 0 -1 0 0 0 1 map  base_link 10" />
+    <node pkg="tf" type="static_transform_publisher" name="robot2cam" args="0 0 1 0 0 0 1 map  base_link 10" />
 	<!-- <node pkg="tf" type="static_transform_publisher" name="robot2cam" args="0 0 0 -1.570796 0 -1.570796  robot_base_link  camera_color_optical_frame 10" /> -->
 
 </launch>

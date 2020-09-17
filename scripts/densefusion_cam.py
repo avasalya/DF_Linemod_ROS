@@ -68,7 +68,7 @@ cam_fy = 605.699
 cam_cy = 247.877
 
 dist = np.array([0.0, 0.0, 0.0, 0.0, 0.0])
-cam_mat = np.matrix([ [cam_fx, 0, cam_cx], [0, cam_fy, cam_cy], [0, 0, 1] ])
+cam_mat = np.array([ [cam_fx, 0, cam_cx], [0, cam_fy, cam_cy], [0, 0, 1] ])
 
 edge = 60.
 edge = edge * mm2m
@@ -354,6 +354,21 @@ def main():
             if  not depth_frame or  not color_frame:
                 raise ValueError('No image found, camera not streaming?')
 
+            """ point cloud """
+            img = o3d.geometry.Image(np.asanyarray(color_frame.get_data()))
+            dep = o3d.geometry.Image(np.asanyarray(depth_frame.get_data()))
+            rgbd = o3d.geometry.RGBDImage.create_from_color_and_depth(img, dep)
+
+            pinhole_camera_intrinsic = o3d.camera.PinholeCameraIntrinsic(o3d.camera.PinholeCameraIntrinsicParameters.PrimeSenseDefault)
+            pcd = o3d.geometry.PointCloud.create_from_rgbd_image(rgbd, pinhole_camera_intrinsic)
+            pcd.transform([[1,0,0,0],[0,-1,0,0],[0,0,-1,0],[0,0,0,1]])
+            pcd.translate((0,0,2))
+            # http://www.open3d.org/docs/release/tutorial/Basic/working_with_numpy.html
+            pcd = np.asarray(pcd.points)
+
+            #NOTE: this will pause theloop
+            # o3d.visualization.draw_geometries([pcd])
+
             """ color image """
             rgb = np.asanyarray(color_frame.get_data())
             rgb = cv2.cvtColor(rgb, cv2.COLOR_BGR2RGB)
@@ -373,21 +388,6 @@ def main():
             """ run DenseFusion """
             df = DenseFusion(mask_rcnn, pose, refiner, objId, rgb, depth)
             df.pose_estimator()
-
-            """ point cloud """
-            img = o3d.geometry.Image(np.asanyarray(color_frame.get_data()))
-            dep = o3d.geometry.Image(np.asanyarray(depth_frame.get_data()))
-            rgbd = o3d.geometry.RGBDImage.create_from_color_and_depth(img, dep)
-
-            pinhole_camera_intrinsic = o3d.camera.PinholeCameraIntrinsic(o3d.camera.PinholeCameraIntrinsicParameters.PrimeSenseDefault)
-            pcd = o3d.geometry.PointCloud.create_from_rgbd_image(rgbd, pinhole_camera_intrinsic)
-            pcd.transform([[1,0,0,0],[0,-1,0,0],[0,0,-1,0],[0,0,0,1]])
-
-            # http://www.open3d.org/docs/release/tutorial/Basic/working_with_numpy.html
-            pcd = np.asarray(pcd.points)
-
-            #NOTE: this will pause theloop
-            # o3d.visualization.draw_geometries([pcd])
 
             """ publish to ros """
             Publisher(df.model_pub, df.pose_pub, cam_mat, dist,
