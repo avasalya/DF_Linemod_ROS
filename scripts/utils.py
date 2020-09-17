@@ -83,7 +83,7 @@ def draw_cube(tar, img, g_draw, color, cam_mat):
                                 camera_intrinsic_matrix = cam_mat,
                                 cuboid3d=Cuboid3d(size3d = [4., 4., 4.]))
     location, quaternion, projected_points = pnpSolver.solve_pnp(points2D)
-    # rvec, tvec = cv2.solvePnPRefineVVS(self.modelPts, self.cloudPts, cam_mat, dist, rot_, my_t)
+    # rvec, tvec = cv2.solvePnPRefineVVS(modelPts, cloudPts, cam_mat, dist, rot_, my_t)
 
     points = []
     points.append(tuple(projected_points[0]))
@@ -154,12 +154,12 @@ def draw_cube(tar, img, g_draw, color, cam_mat):
 
     return location, quaternion, projected_points
 
-def Publisher(model_pub, pose_pub, cam_mat, dist, viz, objs_pose, modelPts, cloudPts):
+def Publisher(model_pub, pose_pub, cam_mat, dist, viz, objs_pose, modelPts, pcd, frame):
 
     """ publish model cloud pints """
     header = std_msgs.msg.Header()
     header.stamp = rospy.Time.now()
-    header.frame_id = "camera_depth_optical_frame"
+    header.frame_id = frame
 
     """ publish pose to ros-msg """
     poses = objs_pose
@@ -168,7 +168,7 @@ def Publisher(model_pub, pose_pub, cam_mat, dist, viz, objs_pose, modelPts, clou
         pose2msg = Pose()
         pose_array = PoseArray()
         pose_array.header.stamp = rospy.Time.now()
-        pose_array.header.frame_id = "camera_color_optical_frame"
+        pose_array.header.frame_id = frame
         print("total onigiri(s) found", len(poses))
         for p in range(len(poses)):
             print(str(p), poses[p])
@@ -192,7 +192,10 @@ def Publisher(model_pub, pose_pub, cam_mat, dist, viz, objs_pose, modelPts, clou
             modelPts = np.dot(modelPts, q2rot[0:3, 0:3]) + pos
 
             """ send to ros """
-            scaled_cloud = pcl2.create_cloud_xyz32(header, modelPts)
+            if frame == "map":
+                scaled_cloud = pcl2.create_cloud_xyz32(header, pcd)
+            else:
+                scaled_cloud = pcl2.create_cloud_xyz32(header, modelPts)
             model_pub.publish(scaled_cloud)
 
             """ publish/visualize pose """

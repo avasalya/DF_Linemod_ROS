@@ -338,7 +338,7 @@ def main():
 
             t1 = time.time()
 
-            # Wait for frame (Color & Depth)
+            """ Wait for frame (Color & Depth) """
             frames = pipeline.wait_for_frames()
             color_frame = frames.get_color_frame()
             depth_frame = rs.align(rs.stream.color).process(frames).get_depth_frame()
@@ -353,28 +353,6 @@ def main():
             """ Depth image """
             depth = np.asanyarray(depth_frame.get_data())
 
-            """ point cloud """
-            # pc = rs.pointcloud()
-            # pointcloud = rs.points()
-            # pc.map_to(color_frame)
-            # pointcloud = pc.calculate(depth_frame)
-            # print(pointcloud.get_vertices())
-
-            # intr = profile.get_stream(rs.stream.color).as_video_stream_profile().get_intrinsics()
-            # pinhole_camera_intrinsic = o3d.camera.PinholeCameraIntrinsic(intr.width, intr.height, intr.fx, intr.fy, intr.ppx, intr.ppy)
-
-            # img = o3d.geometry.Image(rgb.astype(np.uint8))
-            # dep = o3d.geometry.Image(np.asarray(depth).astype(np.float32))
-            # rgbd = o3d.geometry.RGBDImage.create_from_color_and_depth(img, dep)
-
-            # pointcloud = o3d.geometry.PointCloud.create_from_rgbd_image(rgbd, pinhole_camera_intrinsic)
-
-            # o3d.visualization.draw_geometries([pointcloud], zoom=0.3412,
-            #                                 front=[0.4257, -0.2125, -0.8795],
-            #                                 lookat=[2.6172, 2.0475, 1.532],
-            #                                 up=[-0.0694, -0.9768, 0.2024])
-
-
             """ merge depth with rgb NOTE:testing some feature -- not ready """
             gray_color = 153
             clipping_distance = 1 / mm2m # in mm
@@ -388,9 +366,24 @@ def main():
             df = DenseFusion(mask_rcnn, pose, refiner, objId, rgb, depth)
             df.pose_estimator()
 
+            """ point cloud """
+            img = o3d.geometry.Image(np.asanyarray(color_frame.get_data()))
+            dep = o3d.geometry.Image(np.asanyarray(depth_frame.get_data()))
+            rgbd = o3d.geometry.RGBDImage.create_from_color_and_depth(img, dep)
+
+            pinhole_camera_intrinsic = o3d.camera.PinholeCameraIntrinsic(o3d.camera.PinholeCameraIntrinsicParameters.PrimeSenseDefault)
+            pcd = o3d.geometry.PointCloud.create_from_rgbd_image(rgbd, pinhole_camera_intrinsic)
+            pcd.transform([[1,0,0,0],[0,-1,0,0],[0,0,-1,0],[0,0,0,1]])
+
+            # http://www.open3d.org/docs/release/tutorial/Basic/working_with_numpy.html
+            pcd = np.asarray(pcd.points)
+
+            #NOTE: this will pause theloop
+            # o3d.visualization.draw_geometries([pcd])
+
             """ publish to ros """
             Publisher(df.model_pub, df.pose_pub, cam_mat, dist,
-                    df.viz, df.objs_pose, df.modelPts, df.cloudPts)
+                    df.viz, df.objs_pose, df.modelPts, pcd, "map")
 
             t2 = time.time()
             print('inference time is :{0}'.format(t2 - t1))

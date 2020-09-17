@@ -127,7 +127,7 @@ class DenseFusion:
 
             """ publish to ros """
             Publisher(self.model_pub, self.pose_pub, cam_mat, dist,
-                    self.viz, self.objs_pose, self.modelPts, self.cloudPts)
+                    self.viz, self.objs_pose, self.modelPts, self.cloudPts, "camera_color_optical_frame")
 
         except rospy.ROSException:
             print(f'{Fore.RED}ROS Intruptted')
