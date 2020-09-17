@@ -102,7 +102,7 @@ class DenseFusion:
         self.object_index = object_index_
 
         """ publisher / subscriber """
-        self.model_pub = rospy.Publisher("/onigiriCloud", PointCloud2, queue_size=30)
+        self.model_pub = rospy.Publisher("/rgbdCloud", PointCloud2, queue_size=30)
         self.pose_pub = rospy.Publisher('/onigiriPose', PoseArray, queue_size = 30)
         self.pose_sub = rospy.Subscriber('/onigiriPose', PoseArray, self.poseCallback, queue_size = 30)
 
@@ -334,6 +334,14 @@ def main():
     try:
         rospy.init_node('onigiriPose', anonymous=False)
         rospy.loginfo('streaming now...')
+        # rospy.spin()
+        # rate = rospy.Rate(10)
+        # while not rospy.is_shutdown():
+        #     rate.sleep()
+        # except KeyboardInterrupt:
+        #     print ('Shutting down densefusion ROS node')
+        # cv2.destroyAllWindows()
+
         while True:
 
             t1 = time.time()
