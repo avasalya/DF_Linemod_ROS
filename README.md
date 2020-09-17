@@ -42,9 +42,9 @@
 <br />
 
 # publish pose/pointCloud on ROS with `pyrealsense2` pkg
-### 1. run `roscore`
-### 2. `python3 densefusion_cam.py`
-### 3. launch rviz `roslaunch densefusion_ros densefusion_cam.launch` (rgbd cloud not working YET!)
+* `roscore`
+* `python3 densefusion_cam.py`
+*  launch rviz `roslaunch densefusion_ros densefusion_cam.launch` (rgbd cloud not working YET!)
 
 
 <br />
