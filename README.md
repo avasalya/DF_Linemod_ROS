@@ -37,7 +37,7 @@
 *  also possible via
     * `rosrun densefusion_ros densefusion_ros.py` or
     * `./scripts/eval.sh` or
-    * `python3 densefusion_ros.py`
+    * `python3 scripts/densefusion_ros.py`
 
 <br />
 
