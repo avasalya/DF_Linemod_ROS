@@ -41,13 +41,13 @@
 
 <br />
 
-# publish pose/pointCloud on ROS with `pyrealsense2` pkg
+# publish pose/rgbd-pointCloud on ROS with `pyrealsense2` pkg
 * `roscore`
 * `python3 scripts/densefusion_cam.py`
-*  launch rviz `roslaunch densefusion_ros densefusion_cam.launch` (rgbd cloud not working YET!)
+*  launch rviz `roslaunch densefusion_ros densefusion_cam.launch`
 
 
 <br />
 
 # Test with rgbd images [not updated]
-`python3 densefusion_img.py`
+`python3 scripts/densefusion_img.py`
