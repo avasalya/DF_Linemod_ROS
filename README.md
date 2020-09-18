@@ -24,7 +24,7 @@
 * https://www.dropbox.com/sh/wkmqd0w1tvo4592/AADWt9j5SjiklJ5X0dpsSILAa?dl=0
 
 ## change intrinsic parameters as per your camera, whichever scripts you use
-    [***cam_fx***, ***cam_fy***, ***cam_cx***, ***cam_cy***](https://github.com/avasalya/DF_Linemod_ROS/blob/c36b0f4527e654d176c0d4bce205f6bc8701ced4/scripts/densefusion_ros.py#L98)
+* [***cam_fx***, ***cam_fy***, ***cam_cx***, ***cam_cy***](https://github.com/avasalya/DF_Linemod_ROS/blob/c36b0f4527e654d176c0d4bce205f6bc8701ced4/scripts/densefusion_ros.py#L98)
 <br />
 
 # with ROS
