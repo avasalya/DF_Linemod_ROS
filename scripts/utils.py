@@ -157,9 +157,9 @@ def draw_cube(tar, img, g_draw, color, cam_mat):
 def Publisher(model_pub, pose_pub, cam_mat, dist, viz, objs_pose, modelPts, pcd, frame):
 
     """ publish model cloud pints """
-    header = std_msgs.msg.Header()
-    header.stamp = rospy.Time.now()
-    header.frame_id = frame
+    headerPCD = std_msgs.msg.Header()
+    headerPCD.stamp = rospy.Time.now()
+    headerPCD.frame_id = frame
 
     """ publish pose to ros-msg """
     poses = objs_pose
@@ -190,9 +190,9 @@ def Publisher(model_pub, pose_pub, cam_mat, dist, viz, objs_pose, modelPts, pcd,
 
             """ send to ros """
             if frame == "map":
-                scaled_cloud = pcl2.create_cloud_xyz32(header, pcd)
+                scaled_cloud = pcl2.create_cloud_xyz32(headerPCD, pcd)
             else:
-                scaled_cloud = pcl2.create_cloud_xyz32(header, modelPts)
+                scaled_cloud = pcl2.create_cloud_xyz32(headerPCD, modelPts)
             model_pub.publish(scaled_cloud)
 
             """ publish/visualize pose """

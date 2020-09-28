@@ -363,11 +363,11 @@ def main():
             pcd.transform([[1,0,0,0],[0,-1,0,0],[0,0,-1,0],[0,0,0,1]])
             pcd.translate((0,0,2))
             # http://www.open3d.org/docs/release/tutorial/Basic/working_with_numpy.html
-            pcd = np.asarray(pcd.points)
-            print("PCD actual size", pcd.shape)
+            pcd_ = np.asarray(pcd.points)
+            print("PCD actual size", pcd_.shape)
             sampleSize = 50000
-            downSamples = rand.sample(range(0, len(pcd)), sampleSize)
-            pcd_ = pcd[downSamples, :]
+            downSamples = rand.sample(range(0, len(pcd_)), sampleSize)
+            pcd_ = pcd_[downSamples, :]
             print("PCD downsampled to", pcd_.shape)
             #NOTE: this will pause the loop -- use only for debugging
             # o3d.visualization.draw_geometries([pcd_])
