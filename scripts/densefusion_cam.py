@@ -358,20 +358,6 @@ def main():
             dep = o3d.geometry.Image(np.asanyarray(depth_frame.get_data()))
             rgbd = o3d.geometry.RGBDImage.create_from_color_and_depth(img, dep)
 
-            pinhole_camera_intrinsic = o3d.camera.PinholeCameraIntrinsic(o3d.camera.PinholeCameraIntrinsicParameters.PrimeSenseDefault)
-            pcd = o3d.geometry.PointCloud.create_from_rgbd_image(rgbd, pinhole_camera_intrinsic)
-            pcd.transform([[1,0,0,0],[0,-1,0,0],[0,0,-1,0],[0,0,0,1]])
-            pcd.translate((0,0,2))
-            # http://www.open3d.org/docs/release/tutorial/Basic/working_with_numpy.html
-            pcd_ = np.asarray(pcd.points)
-            print("PCD actual size", pcd_.shape)
-            sampleSize = 50000
-            downSamples = rand.sample(range(0, len(pcd_)), sampleSize)
-            pcd_ = pcd_[downSamples, :]
-            print("PCD downsampled to", pcd_.shape)
-            #NOTE: this will pause the loop -- use only for debugging
-            # o3d.visualization.draw_geometries([pcd_])
-
             """ color image """
             rgb = np.asanyarray(color_frame.get_data())
             rgb = cv2.cvtColor(rgb, cv2.COLOR_BGR2RGB)
@@ -385,7 +371,7 @@ def main():
 
             """ publish to ros """
             Publisher(df.model_pub, df.pose_pub, cam_mat, dist,
-                    df.viz, df.objs_pose, df.modelPts, pcd_, "map")
+                    df.viz, df.objs_pose, df.modelPts, rgbd, "map")
 
             t2 = time.time()
             print('inference time is :{0}'.format(t2 - t1))

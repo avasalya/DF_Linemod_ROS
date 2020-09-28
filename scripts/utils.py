@@ -154,22 +154,23 @@ def draw_cube(tar, img, g_draw, color, cam_mat):
 
     return location, quaternion, projected_points
 
-def Publisher(model_pub, pose_pub, cam_mat, dist, viz, objs_pose, modelPts, pcd, frame):
+def Publisher(model_pub, pose_pub, cam_mat, dist, viz, objs_pose, modelPts, rgbd, frame):
 
-    """ publish model cloud pints """
+    """ publish model cloud points """
     headerPCD = std_msgs.msg.Header()
     headerPCD.stamp = rospy.Time.now()
     headerPCD.frame_id = frame
+    scaled_cloud = PointCloud2()
 
     """ publish pose to ros-msg """
+    pose2msg = Pose()
+    pose_array = PoseArray()
+    pose_array.header.stamp = rospy.Time.now()
+    pose_array.header.frame_id = frame
     poses = objs_pose
 
     if poses is not None:
 
-        pose2msg = Pose()
-        pose_array = PoseArray()
-        pose_array.header.stamp = rospy.Time.now()
-        pose_array.header.frame_id = frame
         print("total onigiri(s) found", len(poses))
         for p in range(len(poses)):
             print(str(p), poses[p])
@@ -190,9 +191,27 @@ def Publisher(model_pub, pose_pub, cam_mat, dist, viz, objs_pose, modelPts, pcd,
 
             """ send to ros """
             if frame == "map":
-                scaled_cloud = pcl2.create_cloud_xyz32(headerPCD, pcd)
+                pinhole_camera_intrinsic = o3d.camera.PinholeCameraIntrinsic(o3d.camera.PinholeCameraIntrinsicParameters.PrimeSenseDefault)
+                pcd = o3d.geometry.PointCloud.create_from_rgbd_image(rgbd, pinhole_camera_intrinsic)
+
+                pcd.transform([[1,0,0,0],[0,-1,0,0],[0,0,-1,0],[0,0,0,1]])
+                pcd.translate((0,0,2))
+
+                pcdPts = np.asarray(pcd.points)
+                print("PCD actual size", pcdPts.shape)
+
+                sampleSize = 50000
+                downSamples = rand.sample(range(0, len(pcdPts)), sampleSize)
+                pcdPts = pcdPts[downSamples, :]
+                print("PCD downsampled to", pcdPts.shape)
+                scaled_cloud = pcl2.create_cloud_xyz32(headerPCD, pcdPts)
+
+                #NOTE: this will pause the loop -- use only for debugging
+                # o3d.visualization.draw_geometries([pcdPts])
+
             else:
                 scaled_cloud = pcl2.create_cloud_xyz32(headerPCD, modelPts)
+
             model_pub.publish(scaled_cloud)
 
             """ publish/visualize pose """
@@ -213,6 +232,5 @@ def Publisher(model_pub, pose_pub, cam_mat, dist, viz, objs_pose, modelPts, pcd,
 
             print(f"{Fore.RED} poseArray{Style.RESET_ALL}", pose_array.poses[p])
         pose_pub.publish(pose_array)
-
     else:
         print(f"{Fore.RED}no onigiri detected{Style.RESET_ALL}")
