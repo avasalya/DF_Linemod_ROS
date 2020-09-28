@@ -41,10 +41,11 @@
 
 <br />
 
-# publish pose/rgbd-pointCloud on ROS with `pyrealsense2` pkg
+# publish pose/rgbd-pointCloud on ROS with `pyrealsense2` pkg [pcd doesn't update, possible Rviz memory leaking issue]
 * `roscore`
 * `python3 scripts/densefusion_cam.py`
 *  launch rviz `roslaunch densefusion_ros densefusion_cam.launch`
+*  Use`ESC` to stop
 
 
 <br />

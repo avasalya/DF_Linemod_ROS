@@ -165,6 +165,7 @@ def Publisher(model_pub, pose_pub, cam_mat, dist, viz, objs_pose, modelPts, pcd,
     poses = objs_pose
 
     if poses is not None:
+
         pose2msg = Pose()
         pose_array = PoseArray()
         pose_array.header.stamp = rospy.Time.now()
