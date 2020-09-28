@@ -271,11 +271,11 @@ class DenseFusion:
             """ get mean depth within a box as depth offset """
             depth = self.depth[rmin : rmax, cmin : cmax].astype(float)
             depth = depth * mm2m
-            dep,_,_,_ = cv2.mean(depth)
+            depZ,_,_,_ = cv2.mean(depth)
 
             """ position mm2m """
             my_t = np.array(my_t*mm2m)
-            my_t[2] = dep #NOTE: use this to get depth of obj centroid
+            my_t[2] = depZ #NOTE: use this to get depth of obj centroid
             # print("Pos xyz:{0}".format(my_t))
 
             """ rotation """
@@ -334,7 +334,7 @@ class DenseFusion:
 def main():
     try:
         rospy.init_node('onigiriPose', anonymous=False)
-        rospy.loginfo('streaming now...')
+        rospy.loginfo('ros node initiated...')
         # rospy.spin()
         # rate = rospy.Rate(10)
         # while not rospy.is_shutdown():
@@ -354,6 +354,25 @@ def main():
 
             if  not depth_frame or  not color_frame:
                 raise ValueError('No image found, camera not streaming?')
+
+            """ point cloud """
+            img = o3d.geometry.Image(np.asanyarray(color_frame.get_data()))
+            dep = o3d.geometry.Image(np.asanyarray(depth_frame.get_data()))
+            rgbd = o3d.geometry.RGBDImage.create_from_color_and_depth(img, dep)
+
+            pinhole_camera_intrinsic = o3d.camera.PinholeCameraIntrinsic(o3d.camera.PinholeCameraIntrinsicParameters.PrimeSenseDefault)
+            pcd = o3d.geometry.PointCloud.create_from_rgbd_image(rgbd, pinhole_camera_intrinsic)
+            pcd.transform([[1,0,0,0],[0,-1,0,0],[0,0,-1,0],[0,0,0,1]])
+            pcd.translate((0,0,2))
+            # http://www.open3d.org/docs/release/tutorial/Basic/working_with_numpy.html
+            pcd = np.asarray(pcd.points)
+            print("PCD actual size", pcd.shape)
+            sampleSize = 50000
+            downSamples = rand.sample(range(0, len(pcd)), sampleSize)
+            pcd = pcd[downSamples, :]
+            print("PCD downsampled to", pcd.shape)
+            #NOTE: this will pause the loop -- use only for debugging
+            # o3d.visualization.draw_geometries([pcd])
 
             """ color image """
             rgb = np.asanyarray(color_frame.get_data())
@@ -375,30 +394,9 @@ def main():
             df = DenseFusion(mask_rcnn, pose, refiner, objId, rgb, depth)
             df.pose_estimator()
 
-            """ point cloud """
-            img = o3d.geometry.Image(np.asanyarray(color_frame.get_data()))
-            dep = o3d.geometry.Image(np.asanyarray(depth_frame.get_data()))
-            rgbd = o3d.geometry.RGBDImage.create_from_color_and_depth(img, dep)
-
-            pinhole_camera_intrinsic = o3d.camera.PinholeCameraIntrinsic(o3d.camera.PinholeCameraIntrinsicParameters.PrimeSenseDefault)
-            pcd = o3d.geometry.PointCloud.create_from_rgbd_image(rgbd, pinhole_camera_intrinsic)
-            pcd.transform([[1,0,0,0],[0,-1,0,0],[0,0,-1,0],[0,0,0,1]])
-            pcd.translate((0,0,2))
-            # http://www.open3d.org/docs/release/tutorial/Basic/working_with_numpy.html
-            pcd = np.asarray(pcd.points)
-            print("PCD actual size", pcd.shape)
-            downSample = rand.sample(range(0, len(pcd)), 50000)
-            pcd = pcd[downSample, :]
-            print("PCD downsampled to", pcd.shape)
-            #NOTE: this will pause the loop -- use only for debugging
-            # o3d.visualization.draw_geometries([pcd])
-
             """ publish to ros """
             Publisher(df.model_pub, df.pose_pub, cam_mat, dist,
                     df.viz, df.objs_pose, df.modelPts, pcd, "map")
-
-            # to avoid republishing same data over again
-            del pcd
 
             t2 = time.time()
             print('inference time is :{0}'.format(t2 - t1))
@@ -428,7 +426,7 @@ if __name__ == '__main__':
 
     t0 = time.time()
 
-    autostop = 1000
+    autostop = 10000
 
     main()
 # %%
