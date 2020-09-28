@@ -268,15 +268,20 @@ class DenseFusion:
             """ DF refiner NOTE: results are better without refiner """
             # my_t, my_r = self.pose_refiner(1, my_t.T, my_r.T, points, emb, idx)
 
+            """ position mm2m """
+            my_t = np.array(my_t*mm2m)
+            # print("Pos xyz:{0}".format(my_t))
+
             """ get mean depth within a box as depth offset """
+            #NOTE: use this to get depth of obj centroid
             depth = self.depth[rmin : rmax, cmin : cmax].astype(float)
             depth = depth * mm2m
             depZ,_,_,_ = cv2.mean(depth)
 
-            """ position mm2m """
-            my_t = np.array(my_t*mm2m)
-            # my_t[2] = depZ #NOTE: use this to get depth of obj centroid
-            # print("Pos xyz:{0}".format(my_t))
+            """ offset to align with obj-center """
+            # objC = np.array([0.0, 0.0, depZ])
+            objC = np.array([0.0, 0.0, 0.])
+            my_t =  my_t + objC
 
             """ rotation """
             mat_r = quaternion_matrix(my_r)[:3, :3]
@@ -362,10 +367,10 @@ def main():
             print("PCD actual size", pcd.shape)
             sampleSize = 50000
             downSamples = rand.sample(range(0, len(pcd)), sampleSize)
-            pcd = pcd[downSamples, :]
-            print("PCD downsampled to", pcd.shape)
+            pcd_ = pcd[downSamples, :]
+            print("PCD downsampled to", pcd_.shape)
             #NOTE: this will pause the loop -- use only for debugging
-            # o3d.visualization.draw_geometries([pcd])
+            # o3d.visualization.draw_geometries([pcd_])
 
             """ color image """
             rgb = np.asanyarray(color_frame.get_data())
@@ -380,7 +385,7 @@ def main():
 
             """ publish to ros """
             Publisher(df.model_pub, df.pose_pub, cam_mat, dist,
-                    df.viz, df.objs_pose, df.modelPts, pcd, "map")
+                    df.viz, df.objs_pose, df.modelPts, pcd_, "map")
 
             t2 = time.time()
             print('inference time is :{0}'.format(t2 - t1))

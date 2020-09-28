@@ -181,12 +181,7 @@ def Publisher(model_pub, pose_pub, cam_mat, dist, viz, objs_pose, modelPts, pcd,
             pose2msg.orientation.z = poses[p]['qz']
             pose_array.poses.append(pose2msg)
 
-            #offset to align with obj-center
-            # objC = np.array([-0.01, 0.05, 0.])
-            objC = np.array([0.0, 0.0, 0.])
-
             pos = np.array([poses[p]['tx'], poses[p]['ty'], poses[p]['tz']])
-            pos =  pos + objC
             q2rot = quaternion_matrix([poses[p]['qw'], poses[p]['qx'], poses[p]['qy'], poses[p]['qz']])
 
             """ transform modelPoints w.r.t estimated pose """
