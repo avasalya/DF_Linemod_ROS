@@ -280,15 +280,19 @@ class DenseFusion:
             """ DF refiner NOTE: results are better without refiner """
             # my_t, my_r = self.pose_refiner(1, my_t.T, my_r.T, points, emb, idx)
 
+            """ position mm2m """
+            my_t = np.array(my_t*mm2m)
+            # print("Pos xyz:{0}".format(my_t))
+
             """ get mean depth within a box as depth offset """
             depth = self.depth[rmin : rmax, cmin : cmax].astype(float)
             depth = depth * mm2m
-            dep,_,_,_ = cv2.mean(depth)
+            depZ,_,_,_ = cv2.mean(depth)
 
-            """ position mm2m """
-            my_t = np.array(my_t*mm2m)
-            my_t[2] = dep #NOTE: use this to get depth of obj centroid
-            # print("Pos xyz:{0}".format(my_t))
+            """ offset to align with obj-center """
+            # objC = np.array([0.0, 0.0, depZ])
+            objC = np.array([0.0, 0.0, 0.])
+            my_t =  my_t + objC
 
             """ rotation """
             mat_r = quaternion_matrix(my_r)[:3, :3]
