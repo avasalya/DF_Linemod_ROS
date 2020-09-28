@@ -275,7 +275,7 @@ class DenseFusion:
 
             """ position mm2m """
             my_t = np.array(my_t*mm2m)
-            my_t[2] = depZ #NOTE: use this to get depth of obj centroid
+            # my_t[2] = depZ #NOTE: use this to get depth of obj centroid
             # print("Pos xyz:{0}".format(my_t))
 
             """ rotation """
@@ -335,13 +335,6 @@ def main():
     try:
         rospy.init_node('onigiriPose', anonymous=False)
         rospy.loginfo('ros node initiated...')
-        # rospy.spin()
-        # rate = rospy.Rate(10)
-        # while not rospy.is_shutdown():
-        #     rate.sleep()
-        # except KeyboardInterrupt:
-        #     print ('Shutting down densefusion ROS node')
-        # cv2.destroyAllWindows()
 
         while True:
 
@@ -381,15 +374,6 @@ def main():
             """ Depth image """
             depth = np.asanyarray(depth_frame.get_data())
 
-            """ merge depth with rgb NOTE:testing some feature -- not ready """
-            gray_color = 153
-            clipping_distance = 1 / mm2m # in mm
-            depth_image_3d = np.dstack((depth, depth, depth))
-            bg_removed = np.where((depth_image_3d >clipping_distance) | (depth_image_3d <= 0 ), gray_color, rgb)
-            depth_colormap = cv2.applyColorMap(cv2.convertScaleAbs(depth, alpha= 0.03 ), cv2.COLORMAP_JET)
-            images = np.hstack((bg_removed, depth_colormap))
-            # cv2.imshow("merged rgbd", cv2.cvtColor(images, cv2.COLOR_BGR2RGB))
-
             """ run DenseFusion """
             df = DenseFusion(mask_rcnn, pose, refiner, objId, rgb, depth)
             df.pose_estimator()
@@ -417,8 +401,8 @@ if __name__ == '__main__':
 
     # Stream (Color/Depth) settings
     config = rs.config()
-    config.enable_stream(rs.stream.color, 640 , 480 , rs.format.bgr8, 60)
-    config.enable_stream(rs.stream.depth, 640 , 480 , rs.format.z16, 60)
+    config.enable_stream(rs.stream.color, 640 , 480 , rs.format.bgr8, 30)
+    config.enable_stream(rs.stream.depth, 640 , 480 , rs.format.z16, 30)
 
     # Start streaming
     pipeline = rs.pipeline()

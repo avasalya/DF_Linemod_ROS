@@ -182,7 +182,8 @@ def Publisher(model_pub, pose_pub, cam_mat, dist, viz, objs_pose, modelPts, pcd,
             pose_array.poses.append(pose2msg)
 
             #offset to align with obj-center
-            objC = np.array([-0.01, 0.05, 0.])
+            # objC = np.array([-0.01, 0.05, 0.])
+            objC = np.array([0.0, 0.0, 0.])
 
             pos = np.array([poses[p]['tx'], poses[p]['ty'], poses[p]['tz']])
             pos =  pos + objC
