@@ -203,6 +203,7 @@ class DenseFusion:
         self.rgb_s.append(rgb_s)
         mask, bbox, viz = self.draw_seg(self.batch_predict())
         # cv2.imshow("maskrcnn", cv2.cvtColor(viz, cv2.COLOR_BGR2RGB)), cv2.waitKey(1)
+        cv2.imshow("posePnP", cv2.cvtColor(viz, cv2.COLOR_BGR2RGB))
 
         t2 = time.time()
         print(f'{Fore.YELLOW}mask-rcnn inference time is:{Style.RESET_ALL}', t2 - t1)
