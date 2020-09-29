@@ -371,7 +371,7 @@ def main():
 
             """ publish to ros """
             Publisher(df.model_pub, df.pose_pub, cam_mat, dist,
-                    df.viz, df.objs_pose, df.modelPts, rgbd, "map")
+                    df.viz, df.objs_pose, df.modelPts, rgbd, "World")
 
             t2 = time.time()
             print('inference time is :{0}'.format(t2 - t1))

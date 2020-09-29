@@ -1,4 +1,5 @@
 from __init__ import *
+# import ipdb
 
 def skew(R):
     return (0.5 * (R - R.T))
@@ -156,24 +157,44 @@ def draw_cube(tar, img, g_draw, color, cam_mat):
 
 def Publisher(model_pub, pose_pub, cam_mat, dist, viz, objs_pose, modelPts, rgbd, frame):
 
-    """ publish model cloud points """
+    """ publish rgbd cloud points """
     headerPCD = std_msgs.msg.Header()
     headerPCD.stamp = rospy.Time.now()
     headerPCD.frame_id = frame
     scaled_cloud = PointCloud2()
 
+    if frame == "World":
+        pinhole_camera_intrinsic = o3d.camera.PinholeCameraIntrinsic(o3d.camera.PinholeCameraIntrinsicParameters.PrimeSenseDefault)
+        pcd = o3d.geometry.PointCloud.create_from_rgbd_image(rgbd, pinhole_camera_intrinsic)
+
+        pcd.transform([[1,0,0,0],[0,-1,0,0],[0,0,-1,0],[0,0,0,1]])
+        pcd.translate((0,0,1.5))
+
+        pcdPts = np.asarray(pcd.points)
+        print("PCD actual size", pcdPts.shape)
+
+        sampleSize = 50000
+        downSamples = rand.sample(range(0, len(pcdPts)), sampleSize)
+        pcdPts = pcdPts[downSamples, :]
+        print("PCD downsampled to", pcdPts.shape)
+
+        scaled_cloud = pcl2.create_cloud_xyz32(headerPCD, pcdPts)
+        model_pub.publish(scaled_cloud)
+
+
     """ publish pose to ros-msg """
-    pose2msg = Pose()
-    pose_array = PoseArray()
-    pose_array.header.stamp = rospy.Time.now()
-    pose_array.header.frame_id = frame
-    poses = objs_pose
+    if objs_pose is not None:
 
-    if poses is not None:
-
+        pose_array = PoseArray()
+        pose_array.header.stamp = rospy.Time.now()
+        pose_array.header.frame_id = frame
+        poses = objs_pose
         print("total onigiri(s) found", len(poses))
+
         for p in range(len(poses)):
-            print(str(p), poses[p])
+
+            # print(str(p), poses[p])
+            pose2msg = Pose()
             pose2msg.position.x = poses[p]['tx']
             pose2msg.position.y = poses[p]['ty']
             pose2msg.position.z = poses[p]['tz']
@@ -189,37 +210,17 @@ def Publisher(model_pub, pose_pub, cam_mat, dist, viz, objs_pose, modelPts, rgbd
             """ transform modelPoints w.r.t estimated pose """
             modelPts = np.dot(modelPts, q2rot[0:3, 0:3]) + pos
 
-            """ send to ros """
-            if frame == "map":
-                pinhole_camera_intrinsic = o3d.camera.PinholeCameraIntrinsic(o3d.camera.PinholeCameraIntrinsicParameters.PrimeSenseDefault)
-                pcd = o3d.geometry.PointCloud.create_from_rgbd_image(rgbd, pinhole_camera_intrinsic)
-
-                pcd.transform([[1,0,0,0],[0,-1,0,0],[0,0,-1,0],[0,0,0,1]])
-                pcd.translate((0,0,2))
-
-                pcdPts = np.asarray(pcd.points)
-                print("PCD actual size", pcdPts.shape)
-
-                sampleSize = 50000
-                downSamples = rand.sample(range(0, len(pcdPts)), sampleSize)
-                pcdPts = pcdPts[downSamples, :]
-                print("PCD downsampled to", pcdPts.shape)
-                scaled_cloud = pcl2.create_cloud_xyz32(headerPCD, pcdPts)
-
-                #NOTE: this will pause the loop -- use only for debugging
-                # o3d.visualization.draw_geometries([pcdPts])
-
-            else:
+            """ publish model cloud points """
+            if frame == "camera_color_optical_frame":
                 scaled_cloud = pcl2.create_cloud_xyz32(headerPCD, modelPts)
-
-            model_pub.publish(scaled_cloud)
+                model_pub.publish(scaled_cloud)
 
             """ publish/visualize pose """
             if viz is not None:
                 imgpts_cloud,jac = cv2.projectPoints(modelPts, np.identity(3), np.array([0.,0.,0.]), cam_mat, dist)
                 vizPnP = draw_pointCloud(viz, imgpts_cloud, [0,255,0]) # modelPts
                 draw_axis(viz, q2rot[0:3, 0:3], pos, cam_mat)
-                modelPts = np.zeros(shape=modelPts.shape)
+                modelPts = np.zeros(shape=modelPts.shape) #cleanup
                 cv2.imshow("posePnP", cv2.cvtColor(vizPnP, cv2.COLOR_BGR2RGB))
 
             key = cv2.waitKey(1) & 0xFF
@@ -232,5 +233,6 @@ def Publisher(model_pub, pose_pub, cam_mat, dist, viz, objs_pose, modelPts, rgbd
 
             print(f"{Fore.RED} poseArray{Style.RESET_ALL}", pose_array.poses[p])
         pose_pub.publish(pose_array)
+
     else:
         print(f"{Fore.RED}no onigiri detected{Style.RESET_ALL}")
