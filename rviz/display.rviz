@@ -8,6 +8,7 @@ Panels:
         - /Status1
         - /TF1/Tree1
         - /PoseArray1
+        - /PointCloud22
       Splitter Ratio: 0.5163204669952393
     Tree Height: 608
   - Class: rviz/Selection
@@ -152,11 +153,11 @@ Visualization Manager:
       Topic: /onigiriPose
       Unreliable: false
       Value: true
-    - Alpha: 1
+    - Alpha: 0.5
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds:
-        Max Value: 0.9890450239181519
-        Min Value: 0.9890450239181519
+        Max Value: 0.9054348468780518
+        Min Value: 0.9054348468780518
         Value: true
       Axis: Z
       Channel Name: intensity
@@ -174,7 +175,7 @@ Visualization Manager:
       Position Transformer: XYZ
       Queue Size: 10
       Selectable: true
-      Size (Pixels): 2
+      Size (Pixels): 1
       Size (m): 0.10000000149011612
       Style: Points
       Topic: /onigiriCloud
@@ -210,7 +211,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 1.0165715217590332
+      Distance: 1.0589110851287842
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -225,10 +226,10 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: -1.5697963237762451
+      Pitch: -0.939796507358551
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 4.723137855529785
+      Yaw: 4.70314359664917
     Saved: ~
 Window Geometry:
   Displays:
@@ -247,4 +248,4 @@ Window Geometry:
     collapsed: true
   Width: 1042
   X: 11
-  Y: 386
+  Y: 349

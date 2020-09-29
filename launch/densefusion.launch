@@ -8,6 +8,7 @@
 	<!-- TODO transform it as per real robot2cam -->
 	<!-- https://answers.ros.org/question/263715/fixed-frame-map-does-not-exist/ -->
 	<!-- <node pkg="tf" type="static_transform_publisher" name="robot2cam" args="0 0 0 -1.570796 0 -1.570796  robot_base_link  camera_color_optical_frame 10" /> -->
+	<!-- <node pkg="tf" type="static_transform_publisher" name="robot2cam" args="0 0 0 0 0 0 1 World  base_link 10" /> -->
 
 	<node name="onigiriPose" pkg="densefusion_ros" type="densefusion_ros.py" output="screen" ns = "onigiri">
 		<!-- <param name="ply_model" type="str" value="$(arg ply_model)" /> -->

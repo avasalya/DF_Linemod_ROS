@@ -33,11 +33,12 @@
 
 ### 2. launch rviz along with publisher/subscriber services
 * `roslaunch densefusion_ros densefusion.launch`
+* `roslaunch densefusion_ros rviz.launch` [if rviz doesn't start automtically]
 *  it publishes estimated pose as geometry_msgs/PoseArray and sensor_msgs/pointCloud2
 *  also possible via
-    * `rosrun densefusion_ros densefusion_ros.py` or
-    * `./scripts/eval.sh` or
-    * `python3 scripts/densefusion_ros.py`
+    * `rosrun densefusion_ros densefusion_ros.py`
+    * or `./scripts/eval.sh`
+    * or `python3 scripts/densefusion_ros.py`
 
 <br />
 

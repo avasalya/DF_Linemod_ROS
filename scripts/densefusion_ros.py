@@ -91,8 +91,8 @@ class DenseFusion:
         self.pose_pub = rospy.Publisher('/onigiriPose', PoseArray, queue_size = 30)
         self.pose_sub = rospy.Subscriber('/onigiriPose', PoseArray, self.poseCallback, queue_size = 30)
 
-        # self.ts = message_filters.ApproximateTimeSynchronizer([rgb_sub, depth_sub], 30, 1)
-        self.ts = message_filters.TimeSynchronizer([rgb_sub, depth_sub], 15)
+        # self.ts = message_filters.ApproximateTimeSynchronizer([rgb_sub, depth_sub], 9, 1)
+        self.ts = message_filters.TimeSynchronizer([rgb_sub, depth_sub], 9)
         self.ts.registerCallback(self.callback)
 
         # self.cv_image = np.zeros((480, 640, 3), np.uint8)
@@ -211,6 +211,8 @@ class DenseFusion:
         pred = mask
         pred = pred *255
         pred = np.transpose(pred, (1, 2, 0)) # (CxHxW)->(HxWxC)
+        if pred.shape[2] < 1:
+            print(f"{Fore.RED} no mask detected? {Style.RESET_ALL}", pred.shape)
 
         # convert img into tensor
         rgb_original = np.transpose(rgb, (2, 0, 1))
@@ -351,7 +353,7 @@ class DenseFusion:
 def main():
 
     rospy.init_node('onigiriPose', anonymous=False)
-    rospy.loginfo('streaming now...')
+    rospy.loginfo('starting onigiriPose node...')
 
     """ run DenseFusion """
     DenseFusion(mask_rcnn, pose, refiner, objId)
