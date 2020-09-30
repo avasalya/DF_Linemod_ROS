@@ -293,9 +293,11 @@ class DenseFusion:
             depZ,_,_,_ = cv2.mean(depth)
 
             """ offset to align with obj-center """
+            print("mean depth ", depZ)
             # objC = np.array([0.0, 0.0, depZ])
-            objC = np.array([0.0, 0.0, 0.])
-            my_t =  my_t + objC
+            # objC = np.array([0.0, 0.0, 0.])
+            # my_t =  my_t - objC
+            my_t[2] = depZ
 
             """ rotation """
             mat_r = quaternion_matrix(my_r)[:3, :3]
