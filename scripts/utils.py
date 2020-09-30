@@ -1,4 +1,6 @@
 from __init__ import *
+global t1
+t1 = time.time()
 
 def skew(R):
     return (0.5 * (R - R.T))
@@ -8,7 +10,7 @@ def cay(R):
     return (np.linalg.inv((I - R)) * (I - R))
 
 def makeRortho(R):
-    """ https://math.stackexchange.com/questions/3292034/normalizing-a-rotation-matrix """
+    ''' https://math.stackexchange.com/questions/3292034/normalizing-a-rotation-matrix '''
     return (cay(skew(cay(R))))
 
 def draw_axis(img, R, t, K):
@@ -44,7 +46,7 @@ def cv2pil(image):
     new_image = pImage.fromarray(new_image)
     return new_image
 
-""" adapted from DOPE """
+''' adapted from DOPE '''
 def DrawLine(g_draw, point1, point2, lineColor, lineWidth):
     '''Draws line on image'''
     if not point1 is None and point2 is not None:
@@ -84,7 +86,7 @@ def draw_cube(tar, img, g_draw, color, cam_mat):
     p6 = (int((tar[6][0]/ tar[6][2])*cam_fx + cam_cx),  int((tar[6][1]/ tar[6][2])*cam_fy + cam_cy))
     p7 = (int((tar[7][0]/ tar[7][2])*cam_fx + cam_cx),  int((tar[7][1]/ tar[7][2])*cam_fy + cam_cy))
 
-    """ PnP for refinement """
+    ''' PnP for refinement '''
     points2D = [list(p0), list(p1), list(p2), list(p3), list(p4), list(p5), list(p6), list(p7)]
 
     pnpSolver = CuboidPNPSolver('txonigiri',
@@ -162,44 +164,70 @@ def draw_cube(tar, img, g_draw, color, cam_mat):
 
     return location, quaternion, projected_points
 
-def Publisher(model_pub, pose_pub, cam_mat, dist, viz, objs_pose, modelPts, cloudPts, frame):
+def Publisher(model_pub, pose_pub, cam_mat, dist, viz, objs_pose, modelPts, cloudPts, frame, method):
 
-    listCloudPts = []
-    listModelPts = []
+    global t1
 
-    """ publish rgbd cloud points """
+    ''' publish rgbd cloud points '''
     headerPCD = std_msgs.msg.Header()
     headerPCD.stamp = rospy.Time.now()
     headerPCD.frame_id = frame
     scaled_cloud = PointCloud2()
 
-    if frame == "World": # this has no effect when using ros for rgb-d frames
-        pinhole_camera_intrinsic = o3d.camera.PinholeCameraIntrinsic(o3d.camera.PinholeCameraIntrinsicParameters.PrimeSenseDefault)
-        pcd = o3d.geometry.PointCloud.create_from_rgbd_image(cloudPts, pinhole_camera_intrinsic)
+    if frame == 'World': # this has no effect when using ros for rgb-d frames
 
-        pcd.transform([[1,0,0,0],[0,-1,0,0],[0,0,-1,0],[0,0,0,1]])
-        pcd.translate((0,0,1.5))
+        if method == 'open3d':
+            pinhole_camera_intrinsic = o3d.camera.PinholeCameraIntrinsic(o3d.camera.PinholeCameraIntrinsicParameters.PrimeSenseDefault)
+            pcd = o3d.geometry.PointCloud.create_from_rgbd_image(cloudPts, pinhole_camera_intrinsic)
+            pcd.transform([[1,0,0,0],[0,-1,0,0],[0,0,-1,0],[0,0,0,1]])
+            pcd.translate((0,0,1.5))
 
-        pcdPts = np.asarray(pcd.points)
-        print("PCD actual size", pcdPts.shape)
+            pcdPts = np.asarray(pcd.points)
+            print('PCD actual size', pcdPts.shape)
 
-        sampleSize = 50000
-        downSamples = rand.sample(range(0, len(pcdPts)), sampleSize)
-        pcdPts = pcdPts[downSamples, :]
-        print("PCD downsampled to", pcdPts.shape)
+            sampleSize = 50000
+            downSamples = rand.sample(range(0, len(pcdPts)), sampleSize)
+            pcdPts = pcdPts[downSamples, :]
 
-        scaled_cloud = pcl2.create_cloud_xyz32(headerPCD, pcdPts)
-        model_pub.publish(scaled_cloud)
+            print('PCD downsampled to', pcdPts.shape)
+            scaled_cloud = pcl2.create_cloud_xyz32(headerPCD, pcdPts)
+            model_pub.publish(scaled_cloud)
+
+            # to clear memory buffer
+            t2 = time.time()
+            if (int(t2-t1) % 10 == 0):
+                pcdPts = np.zeros(shape=pcdPts.shape)
+                scaled_cloud = pcl2.create_cloud_xyz32(headerPCD, pcdPts)
+                model_pub.publish(scaled_cloud)
+                del pcd
 
 
-    """ publish pose to ros-msg """
+        if method == 'realsense':
+            sampleSize = 50000
+            downSamples = rand.sample(range(0, len(cloudPts)), sampleSize)
+            cloudPts = cloudPts[downSamples, :]
+            cloudPts = np.dot(cloudPts, [[1,0,0],[0,-1,0],[0,0,-1]]) #+ [(0,0,1.5)]
+            scaled_cloud = pcl2.create_cloud_xyz32(headerPCD, cloudPts)
+            model_pub.publish(scaled_cloud)
+
+            # to clear memory buffer
+            t2 = time.time()
+            if (int(t2-t1) % 10 == 0):
+                cloudPts = np.zeros(shape=cloudPts.shape)
+                scaled_cloud = pcl2.create_cloud_xyz32(headerPCD, cloudPts)
+                model_pub.publish(scaled_cloud)
+                del cloudPts
+
+
+
+    ''' publish pose to ros-msg '''
     if objs_pose is not None:
 
         pose_array = PoseArray()
         pose_array.header.stamp = rospy.Time.now()
         pose_array.header.frame_id = frame
         poses = objs_pose
-        print("total onigiri(s) found", len(poses))
+        print('total onigiri(s) found', len(poses))
 
         for p in range(len(poses)):
 
@@ -212,7 +240,7 @@ def Publisher(model_pub, pose_pub, cam_mat, dist, viz, objs_pose, modelPts, clou
             pose2msg.orientation.y = poses[p]['qy']
             pose2msg.orientation.z = poses[p]['qz']
             pose_array.poses.append(pose2msg)
-            print(f"{Fore.RED} poseArray{Style.RESET_ALL}", pose_array.poses[p])
+            print(f'{Fore.RED} poseArray{Style.RESET_ALL}', pose_array.poses[p])
 
             pos = np.array([poses[p]['tx'], poses[p]['ty'], poses[p]['tz']])
             q2rot = quaternion_matrix([poses[p]['qw'], poses[p]['qx'], poses[p]['qy'], poses[p]['qz']])
@@ -220,11 +248,11 @@ def Publisher(model_pub, pose_pub, cam_mat, dist, viz, objs_pose, modelPts, clou
 
         pose_pub.publish(pose_array)
 
-        if frame == "World":
-            cv2.imshow("pose", cv2.cvtColor(viz, cv2.COLOR_BGR2RGB))
+        if frame == 'World':
+            cv2.imshow('pose', cv2.cvtColor(viz, cv2.COLOR_BGR2RGB))
             key = cv2.waitKey(1) & 0xFF # stop script
             if  key == 27:
-                rospy.loginfo(f"{Fore.RED}stopping streaming...{Style.RESET_ALL}")
+                rospy.loginfo(f'{Fore.RED}stopping streaming...{Style.RESET_ALL}')
                 try:
                     sys.exit(1)
                 except SystemExit:
@@ -232,4 +260,4 @@ def Publisher(model_pub, pose_pub, cam_mat, dist, viz, objs_pose, modelPts, clou
 
 
     else:
-        print(f"{Fore.RED}no onigiri detected{Style.RESET_ALL}")
+        print(f'{Fore.RED}no onigiri detected{Style.RESET_ALL}')

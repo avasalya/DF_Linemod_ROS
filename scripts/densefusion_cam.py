@@ -12,8 +12,8 @@ else:
     os.system('cls')
 
 # specify which gpu to use
-os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"]="1" # "0,1,2,3"
+os.environ['CUDA_DEVICE_ORDER']='PCI_BUS_ID'
+os.environ['CUDA_VISIBLE_DEVICES']='1' # '0,1,2,3'
 
 num_objects = 1
 num_points = 100
@@ -42,18 +42,18 @@ pose = PoseNet(num_points, num_objects)
 pose.cuda()
 pose.load_state_dict(torch.load(path + '/../txonigiri/pose_model.pth'))
 pose.eval()
-print("pose model loaded...")
+print('pose model loaded...')
 
 refiner = PoseRefineNet(num_points, num_objects)
 refiner.cuda()
 refiner.load_state_dict(torch.load(path + '/../txonigiri/pose_refine_model.pth'))
 refiner.eval()
-print("pose refine model loaded...")
+print('pose refine model loaded...')
 
 filepath = (path + '/../txonigiri/txonigiri.ply')
 mesh_model = o3d.io.read_triangle_mesh(filepath)
 randomIndices = rand.sample(range(0, 9958), num_points)
-print("object mesh model loaded...")
+print('object mesh model loaded...')
 
 bs = 1
 objId = 0
@@ -101,8 +101,8 @@ class DenseFusion:
         self.refiner = refiner
         self.object_index = object_index_
 
-        """ publisher / subscriber """
-        self.model_pub = rospy.Publisher("/rgbdCloud", PointCloud2, queue_size=30)
+        ''' publisher / subscriber '''
+        self.model_pub = rospy.Publisher('/rgbdCloud', PointCloud2, queue_size=30)
         self.pose_pub = rospy.Publisher('/onigiriPose', PoseArray, queue_size = 30)
         self.pose_sub = rospy.Subscriber('/onigiriPose', PoseArray, self.poseCallback, queue_size = 30)
 
@@ -185,12 +185,12 @@ class DenseFusion:
 
         t1 = time.time()
         obj_pose = []
-        print(f"{Fore.GREEN}estimating pose..{Style.RESET_ALL}")
+        print(f'{Fore.GREEN}estimating pose..{Style.RESET_ALL}')
 
-        """ mask rcnn """
+        ''' mask rcnn '''
         mask, bbox, viz = self.draw_seg(self.batch_predict())
-        # cv2.imshow("mask", cv2.cvtColor(viz, cv2.COLOR_BGR2RGB)), cv2.moveWindow('mask', 0, 500)
-        cv2.imshow("pose", cv2.cvtColor(viz, cv2.COLOR_BGR2RGB))
+        # cv2.imshow('mask', cv2.cvtColor(viz, cv2.COLOR_BGR2RGB)), cv2.moveWindow('mask', 0, 500)
+        cv2.imshow('pose', cv2.cvtColor(viz, cv2.COLOR_BGR2RGB))
 
         t2 = time.time()
         print(f'{Fore.YELLOW}mask-rcnn inference time is:{Style.RESET_ALL}', t2 - t1)
@@ -259,58 +259,58 @@ class DenseFusion:
             pred_c = pred_c.view(bs, num_points)
             how_max, which_max = torch.max(pred_c, 1) #1
             pred_t = pred_t.view(bs * num_points, 1, 3)
-            # print("max confidence", how_max)
+            # print('max confidence', how_max)
 
             my_r = pred_r[0][which_max[0]].view(-1).cpu().data.numpy()
             my_t = (points.view(bs * num_points, 1, 3) + pred_t)[which_max[0]].view(-1).cpu().data.numpy()
             my_pred = np.append(my_r, my_t)
 
-            """ get mean depth within a box as depth offset """
+            ''' get mean depth within a box as depth offset '''
             depth = self.depth[rmin : rmax, cmin : cmax].astype(float)
             # depth = depth * mm2m
             depZ,_,_,_ = cv2.mean(depth)
 
-            # """ offset to align with obj-center """
+            # ''' offset to align with obj-center '''
             # # objC = np.array([0.0, 0.0, depZ])
             # objC = np.array([0.0, 0.0, 0.])
             # my_t =  my_t + objC
             # my_t[2] = depZ
 
-            """ DF refiner NOTE: results are better without refiner """
+            ''' DF refiner NOTE: results are better without refiner '''
             # my_t, my_r = self.pose_refiner(1, my_t.T, my_r.T, points, emb, idx)
             # my_t, my_r = self.pose_refiner(1, my_t, my_r, points, emb, idx)
 
-            """ position mm2m """
+            ''' position mm2m '''
             my_t = np.array(my_t*mm2m)
-            # print("Pos xyz:{0}".format(my_t))
+            # print('Pos xyz:{0}'.format(my_t))
 
-            """ rotation """
+            ''' rotation '''
             mat_r = quaternion_matrix(my_r)[:3, :3]
             # print('estimated rotation is\n:{0}'.format(mat_r))
 
-            """ project point cloud """
+            ''' project point cloud '''
             imgpts_cloud,_ = cv2.projectPoints(np.dot(points.cpu().numpy(), mat_r), mat_r, my_t, cam_mat, dist)
             viz = draw_pointCloud(viz, imgpts_cloud, [255, 0, 0])
             self.cloudPts = imgpts_cloud.reshape(num_points, 2)
 
-            """ draw cmr 2D box """
+            ''' draw cmr 2D box '''
             cv2.rectangle(viz, (cmax, cmin), (rmax, rmin), (255,0,0))
 
-            """ introduce offset in Rot """
+            ''' introduce offset in Rot '''
             Rx = rotation_matrix(2*m.pi/3, [1, 0, 0], my_t)
             Ry = rotation_matrix(10*m.pi/180, [0, 1, 0], my_t)
             Rz = rotation_matrix(5*m.pi/180, [0, 0, 1], my_t)
             offR = concatenate_matrices(Rx, Ry, Rz)[:3,:3]
             mat_r = np.dot(mat_r.T, offR[:3, :3])
 
-            """ transform 3D box and axis with estimated pose and Draw """
+            ''' transform 3D box and axis with estimated pose and Draw '''
             # target_df = np.dot(edges, mat_r) + my_t
             # new_image = cv2pil(viz)
             # g_draw = ImageDraw.Draw(new_image)
             # location, quaternion, projected_points = draw_cube(target_df, viz, g_draw, (255, 255, 255), cam_mat)
             # viz = pil2cv(new_image)
 
-            """ convert pose to ros-msg """
+            ''' convert pose to ros-msg '''
             I = np.identity(4)
             I[0:3, 0:3] = mat_r
             I[0:3, -1] = my_t# + np.asarray(location) *0.01 #cm2m
@@ -329,7 +329,7 @@ class DenseFusion:
             self.viz = viz
         else:
             if len(bbox) < 1:
-                print(f"{Fore.RED}unable to detect pose..{Style.RESET_ALL}")
+                print(f'{Fore.RED}unable to detect pose..{Style.RESET_ALL}')
 
         self.objs_pose = obj_pose
 
@@ -346,7 +346,7 @@ def main():
 
             t1 = time.time()
 
-            """ Wait for frame (Color & Depth) """
+            ''' Wait for frame (Color & Depth) '''
             frames = pipeline.wait_for_frames()
             color_frame = frames.get_color_frame()
             depth_frame = rs.align(rs.stream.color).process(frames).get_depth_frame()
@@ -354,36 +354,46 @@ def main():
             if  not depth_frame or not color_frame:
                 raise ValueError('No image found, camera not streaming?')
 
-            """ point cloud """
-            img = o3d.geometry.Image(np.asanyarray(color_frame.get_data()))
-            dep = o3d.geometry.Image(np.asanyarray(depth_frame.get_data()))
-            cloudPts = o3d.geometry.RGBDImage.create_from_color_and_depth(img, dep)
 
-            """ color image """
+            if method == 'open3d':
+                ''' point cloud using open3d'''
+                img = o3d.geometry.Image(np.asanyarray(color_frame.get_data()))
+                dep = o3d.geometry.Image(np.asanyarray(depth_frame.get_data()))
+                pcdPts = o3d.geometry.RGBDImage.create_from_color_and_depth(img, dep)
+
+            elif method == 'realsense': #2x slower
+                ''' pyrealsense pointcloud '''
+                pc.map_to(color_frame)
+                pointcloud = pc.calculate(depth_frame)
+                pointcloud.export_to_ply('1.ply', color_frame)
+                rgbdPCD = o3d.io.read_triangle_mesh('1.ply')
+                pcdPts = np.asarray(rgbdPCD.vertices)
+
+            ''' color image '''
             rgb = np.asanyarray(color_frame.get_data())
             rgb = cv2.cvtColor(rgb, cv2.COLOR_BGR2RGB)
 
-            """ Depth image """
+            ''' Depth image '''
             depth = np.asanyarray(depth_frame.get_data())
 
-            """ run DenseFusion """
+            ''' run DenseFusion '''
             df = DenseFusion(mask_rcnn, pose, refiner, objId, rgb, depth)
             df.pose_estimator()
 
-            """ publish to ros """
+            ''' publish to ros '''
             Publisher(df.model_pub, df.pose_pub, cam_mat, dist,
-                    df.viz, df.objs_pose, df.modelPts, cloudPts, "World")
+                    df.viz, df.objs_pose, df.modelPts, pcdPts, 'World', method)
 
             t2 = time.time()
             print('inference time is :{0}'.format(t2 - t1))
 
             key = cv2.waitKey(1) & 0xFF
             if  key == 27:
-                print("stopping streaming...")
+                print('stopping streaming...')
                 break
 
             if t2-t0 > autostop:
-                print("auto stop streaming after {} seconds".format(int(autostop)))
+                print('auto stop streaming after {} seconds'.format(int(autostop)))
                 break
     finally:
         pipeline.stop()
@@ -399,10 +409,15 @@ if __name__ == '__main__':
     # Start streaming
     pipeline = rs.pipeline()
     profile = pipeline.start(config)
+    pc = rs.pointcloud()
 
     t0 = time.time()
 
     autostop = 10000
+
+    # which method to use for publishing rgbd pointcloud
+    # 'realsense' or 'open3d'
+    method = 'open3d'
 
     main()
 # %%
