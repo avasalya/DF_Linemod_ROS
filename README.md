@@ -34,7 +34,7 @@
 ### 2. launch rviz along with publisher/subscriber services
 * `roslaunch densefusion_ros densefusion.launch`
 * `roslaunch densefusion_ros rviz.launch` [if rviz doesn't start automtically]
-*  it publishes estimated pose as geometry_msgs/PoseArray and sensor_msgs/pointCloud2
+*  it publishes estimated pose as geometry_msgs/PoseArray
 *  also possible via
     * `rosrun densefusion_ros densefusion_ros.py`
     * or `./scripts/eval.sh`
@@ -42,11 +42,12 @@
 
 <br />
 
-# publish pose/rgbd-pointCloud on ROS with `pyrealsense2` pkg [pcd doesn't update, possible Rviz memory leaking issue]
+# publish pose/rgbd-pointCloud on ROS with `pyrealsense2` pkg
 * `roscore`
 * `python3 scripts/densefusion_cam.py`
 *  launch rviz `roslaunch densefusion_ros densefusion_cam.launch`
 *  Use `ESC` to stop
+*  NOTE: [pcd doesn't update, possible Rviz memory leaking issue]
 
 
 <br />

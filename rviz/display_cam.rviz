@@ -106,9 +106,9 @@ Visualization Manager:
       Enabled: true
       Invert Rainbow: false
       Max Color: 255; 255; 255
-      Max Intensity: 1.0540000200271606
+      Max Intensity: 1.1110000610351562
       Min Color: 85; 87; 83
-      Min Intensity: 0.5950000286102295
+      Min Intensity: -0.03400003910064697
       Name: PointCloud2
       Position Transformer: XYZ
       Queue Size: 30
@@ -164,10 +164,10 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 1.424796462059021
+      Pitch: 1.5697963237762451
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 4.648092746734619
+      Yaw: 4.7780985832214355
     Saved: ~
 Window Geometry:
   Displays:
@@ -185,5 +185,5 @@ Window Geometry:
   Views:
     collapsed: true
   Width: 1202
-  X: 143
-  Y: 83
+  X: 3546
+  Y: 183

@@ -6,6 +6,8 @@ Panels:
       Expanded:
         - /Global Options1
         - /Status1
+        - /PointCloud21
+        - /TF1/Frames1
         - /TF1/Tree1
         - /PoseArray1
         - /PointCloud22
@@ -97,11 +99,11 @@ Visualization Manager:
         camera_color_frame:
           Value: false
         camera_color_optical_frame:
-          Value: true
+          Value: false
         camera_depth_frame:
           Value: false
         camera_depth_optical_frame:
-          Value: false
+          Value: true
         camera_infra1_frame:
           Value: false
         camera_infra1_optical_frame:
@@ -153,11 +155,11 @@ Visualization Manager:
       Topic: /onigiriPose
       Unreliable: false
       Value: true
-    - Alpha: 0.5
+    - Alpha: 1
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds:
-        Max Value: 0.5651201605796814
-        Min Value: 0.5651201605796814
+        Max Value: 0.923253059387207
+        Min Value: 0.5481390357017517
         Value: true
       Axis: Z
       Channel Name: intensity
@@ -187,8 +189,8 @@ Visualization Manager:
   Global Options:
     Background Color: 48; 48; 48
     Default Light: true
-    Fixed Frame: camera_color_optical_frame
-    Frame Rate: 30
+    Fixed Frame: camera_depth_optical_frame
+    Frame Rate: 15
   Name: root
   Tools:
     - Class: rviz/Interact
@@ -211,25 +213,25 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 0.7820958495140076
+      Distance: 1.141455888748169
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: 0.02312614768743515
-        Y: -0.15115362405776978
-        Z: 0.2906333804130554
+        X: 0.06079433113336563
+        Y: -0.2014112025499344
+        Z: 0.31463688611984253
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: -1.26979660987854
+      Pitch: -1.0347968339920044
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 4.673145771026611
+      Yaw: 4.728150367736816
     Saved: ~
 Window Geometry:
   Displays:
@@ -247,5 +249,5 @@ Window Geometry:
   Views:
     collapsed: true
   Width: 1720
-  X: 1720
-  Y: 27
+  X: 3450
+  Y: 20

@@ -14,7 +14,7 @@ os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
 os.environ["CUDA_VISIBLE_DEVICES"]="0" # "0,1,2,3"
 
 num_objects = 1
-num_points = 100
+num_points = 500
 
 path = os.path.dirname(__file__)
 
@@ -127,7 +127,7 @@ class DenseFusion:
 
             """ publish to ros """
             Publisher(self.model_pub, self.pose_pub, cam_mat, dist,
-                    self.viz, self.objs_pose, self.modelPts, self.cloudPts, "camera_color_optical_frame")
+                    self.viz, self.objs_pose, self.modelPts, self.cloudPts, "camera_depth_optical_frame")
 
         except rospy.ROSException:
             print(f'{Fore.RED}ROS Intruptted')
@@ -202,8 +202,14 @@ class DenseFusion:
         rgb_s = np.transpose(rgb, (2, 0, 1))
         self.rgb_s.append(rgb_s)
         mask, bbox, viz = self.draw_seg(self.batch_predict())
-        # cv2.imshow("maskrcnn", cv2.cvtColor(viz, cv2.COLOR_BGR2RGB)), cv2.waitKey(1)
-        cv2.imshow("posePnP", cv2.cvtColor(viz, cv2.COLOR_BGR2RGB))
+
+        cv2.imshow("segmentation", cv2.cvtColor(viz, cv2.COLOR_BGR2RGB))
+        key = cv2.waitKey(1) & 0xFF
+        if key == 27:
+            try:
+                sys.exit(1)
+            except SystemExit:
+                os._exit(0)
 
         t2 = time.time()
         print(f'{Fore.YELLOW}mask-rcnn inference time is:{Style.RESET_ALL}', t2 - t1)
@@ -285,6 +291,8 @@ class DenseFusion:
             # get mean depth within a box as depth offset
             depth = self.depth[rmin : rmax, cmin : cmax].astype(float)
             depZ,_,_,_ = cv2.mean(depth)
+            # my_t[0] = my_t[0] - 0.01
+            # my_t[1] = my_t[1] + 0.1
             my_t[2] = depZ
 
             """ DF refiner NOTE: results are better without refiner """
@@ -314,13 +322,6 @@ class DenseFusion:
             offR = concatenate_matrices(Rx, Ry, Rz)[:3,:3]
             mat_r = np.dot(mat_r.T, offR[:3, :3])
 
-            """ transform 3D box and axis with estimated pose and Draw """
-            # target_df = np.dot(edges, mat_r) + my_t
-            # new_image = cv2pil(viz)
-            # g_draw = ImageDraw.Draw(new_image)
-            # location, quaternion, projected_points = draw_cube(target_df, viz, g_draw, (255, 255, 255), cam_mat)
-            # viz = pil2cv(new_image)
-
             """ convert pose to ros-msg """
             I = np.identity(4)
             I[0:3, 0:3] = mat_r
@@ -338,6 +339,7 @@ class DenseFusion:
 
             obj_pose.append(pose)
             self.viz = viz
+
         else:
             if len(bbox) < 1:
                 print(f"{Fore.RED}unable to detect pose..{Style.RESET_ALL}")

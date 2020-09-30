@@ -22,8 +22,16 @@ def draw_axis(img, R, t, K):
     return img
 
 def draw_pointCloud(img, imgpts, color):
+
     for point in imgpts:
-        img=cv2.circle(img,(int(point[0][0]),int(point[0][1])), 1, color, -1)
+        img = cv2.circle(img,(int(point[0][0]),int(point[0][1])), 1, color, -1)
+    return img
+
+def draw_pointCloudList(img, imgpts, color):
+
+    for c in range(len(imgpts)):
+        for point in imgpts[c]:
+            img = cv2.circle(img,(int(point[0][0]),int(point[0][1])), 1, color, -1)
     return img
 
 def pil2cv(image):
@@ -154,7 +162,10 @@ def draw_cube(tar, img, g_draw, color, cam_mat):
 
     return location, quaternion, projected_points
 
-def Publisher(model_pub, pose_pub, cam_mat, dist, viz, objs_pose, modelPts, rgbd, frame):
+def Publisher(model_pub, pose_pub, cam_mat, dist, viz, objs_pose, modelPts, cloudPts, frame):
+
+    listCloudPts = []
+    listModelPts = []
 
     """ publish rgbd cloud points """
     headerPCD = std_msgs.msg.Header()
@@ -164,7 +175,7 @@ def Publisher(model_pub, pose_pub, cam_mat, dist, viz, objs_pose, modelPts, rgbd
 
     if frame == "World": # this has no effect when using ros for rgb-d frames
         pinhole_camera_intrinsic = o3d.camera.PinholeCameraIntrinsic(o3d.camera.PinholeCameraIntrinsicParameters.PrimeSenseDefault)
-        pcd = o3d.geometry.PointCloud.create_from_rgbd_image(rgbd, pinhole_camera_intrinsic)
+        pcd = o3d.geometry.PointCloud.create_from_rgbd_image(cloudPts, pinhole_camera_intrinsic)
 
         pcd.transform([[1,0,0,0],[0,-1,0,0],[0,0,-1,0],[0,0,0,1]])
         pcd.translate((0,0,1.5))
@@ -192,7 +203,6 @@ def Publisher(model_pub, pose_pub, cam_mat, dist, viz, objs_pose, modelPts, rgbd
 
         for p in range(len(poses)):
 
-            # print(str(p), poses[p])
             pose2msg = Pose()
             pose2msg.position.x = poses[p]['tx']
             pose2msg.position.y = poses[p]['ty']
@@ -202,36 +212,23 @@ def Publisher(model_pub, pose_pub, cam_mat, dist, viz, objs_pose, modelPts, rgbd
             pose2msg.orientation.y = poses[p]['qy']
             pose2msg.orientation.z = poses[p]['qz']
             pose_array.poses.append(pose2msg)
+            print(f"{Fore.RED} poseArray{Style.RESET_ALL}", pose_array.poses[p])
 
             pos = np.array([poses[p]['tx'], poses[p]['ty'], poses[p]['tz']])
             q2rot = quaternion_matrix([poses[p]['qw'], poses[p]['qx'], poses[p]['qy'], poses[p]['qz']])
+            draw_axis(viz, q2rot[0:3, 0:3], pos, cam_mat)
 
-            """ transform modelPoints w.r.t estimated pose """
-            modelPts = np.dot(modelPts, q2rot[0:3, 0:3]) + pos
-
-            """ publish model cloud points """
-            if frame == "camera_color_optical_frame":
-                scaled_cloud = pcl2.create_cloud_xyz32(headerPCD, modelPts)
-                model_pub.publish(scaled_cloud)
-
-            """ publish/visualize pose """
-            if viz is not None:
-                imgpts_cloud,jac = cv2.projectPoints(modelPts, np.identity(3), np.array([0.,0.,0.]), cam_mat, dist)
-                vizPnP = draw_pointCloud(viz, imgpts_cloud, [0,255,0]) # modelPts
-                draw_axis(viz, q2rot[0:3, 0:3], pos, cam_mat)
-                modelPts = np.zeros(shape=modelPts.shape) #cleanup
-                cv2.imshow("posePnP", cv2.cvtColor(vizPnP, cv2.COLOR_BGR2RGB))
-
-            key = cv2.waitKey(1) & 0xFF
-            if  key == 27:
-                rospy.loginfo(f"{Fore.RED}stopping streaming...{Style.RESET_ALL}")
-                try:
-                    sys.exit(1)
-                except SystemExit:
-                    os._exit(0)
-
-            print(f"{Fore.RED} poseArray{Style.RESET_ALL}", pose_array.poses[p])
         pose_pub.publish(pose_array)
+
+        cv2.imshow("pose", cv2.cvtColor(viz, cv2.COLOR_BGR2RGB))
+        key = cv2.waitKey(1) & 0xFF # stop script
+        if  key == 27:
+            rospy.loginfo(f"{Fore.RED}stopping streaming...{Style.RESET_ALL}")
+            try:
+                sys.exit(1)
+            except SystemExit:
+                os._exit(0)
+
 
     else:
         print(f"{Fore.RED}no onigiri detected{Style.RESET_ALL}")
