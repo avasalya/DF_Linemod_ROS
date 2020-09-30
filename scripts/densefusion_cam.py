@@ -350,7 +350,7 @@ def main():
             color_frame = frames.get_color_frame()
             depth_frame = rs.align(rs.stream.color).process(frames).get_depth_frame()
 
-            if  not depth_frame or  not color_frame:
+            if  not depth_frame or not color_frame:
                 raise ValueError('No image found, camera not streaming?')
 
             """ point cloud """

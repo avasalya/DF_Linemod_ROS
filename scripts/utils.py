@@ -1,5 +1,4 @@
 from __init__ import *
-# import ipdb
 
 def skew(R):
     return (0.5 * (R - R.T))
@@ -163,7 +162,7 @@ def Publisher(model_pub, pose_pub, cam_mat, dist, viz, objs_pose, modelPts, rgbd
     headerPCD.frame_id = frame
     scaled_cloud = PointCloud2()
 
-    if frame == "World":
+    if frame == "World": # this has no effect when using ros for rgb-d frames
         pinhole_camera_intrinsic = o3d.camera.PinholeCameraIntrinsic(o3d.camera.PinholeCameraIntrinsicParameters.PrimeSenseDefault)
         pcd = o3d.geometry.PointCloud.create_from_rgbd_image(rgbd, pinhole_camera_intrinsic)
 
