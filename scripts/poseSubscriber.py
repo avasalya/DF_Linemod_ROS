@@ -8,7 +8,7 @@ class poseSubscriber:
 
     def __init__(self):
         """ subscribe to pose in camera_color_optical_frame  """
-        self.pose_sub = rospy.Subscriber('/onigiriPose', PoseArray, self.poseCallback, queue_size = 2)
+        self.pose_sub = rospy.Subscriber('/onigiriPose', PoseArray, self.poseCallback, queue_size = 3)
         self.poseArray = PoseArray()
 
 

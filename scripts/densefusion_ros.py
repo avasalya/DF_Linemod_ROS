@@ -87,9 +87,9 @@ class DenseFusion:
         ''' publisher / subscriber '''
         rgb_sub = message_filters.Subscriber('/camera/color/image_raw', Image)
         depth_sub = message_filters.Subscriber('/camera/depth/image_rect_raw', Image)
-        self.model_pub = rospy.Publisher('/onigiriCloud', PointCloud2, queue_size=30)
-        self.pose_pub = rospy.Publisher('/onigiriPose', PoseArray, queue_size = 30)
-        self.pose_sub = rospy.Subscriber('/onigiriPose', PoseArray, self.poseCallback, queue_size = 30)
+        self.model_pub = rospy.Publisher('/onigiriCloud', PointCloud2, queue_size = 3)
+        self.pose_pub = rospy.Publisher('/onigiriPose', PoseArray, queue_size = 3)
+        self.pose_sub = rospy.Subscriber('/onigiriPose', PoseArray, self.poseCallback, queue_size = 3)
 
         # self.ts = message_filters.ApproximateTimeSynchronizer([rgb_sub, depth_sub], 9, 1)
         self.ts = message_filters.TimeSynchronizer([rgb_sub, depth_sub], 9)

@@ -102,9 +102,9 @@ class DenseFusion:
         self.object_index = object_index_
 
         ''' publisher / subscriber '''
-        self.model_pub = rospy.Publisher('/rgbdCloud', PointCloud2, queue_size=30)
-        self.pose_pub = rospy.Publisher('/onigiriPose', PoseArray, queue_size = 30)
-        self.pose_sub = rospy.Subscriber('/onigiriPose', PoseArray, self.poseCallback, queue_size = 30)
+        self.model_pub = rospy.Publisher('/rgbdCloud', PointCloud2, queue_size = 3)
+        self.pose_pub = rospy.Publisher('/onigiriPose', PoseArray, queue_size = 3)
+        self.pose_sub = rospy.Subscriber('/onigiriPose', PoseArray, self.poseCallback, queue_size = 3)
 
         self.viz = np.zeros((480, 640, 3), np.uint8)
         self.objs_pose = None
