@@ -86,7 +86,7 @@ class DenseFusion:
 
         """ publisher / subscriber """
         rgb_sub = message_filters.Subscriber('/camera/color/image_raw', Image)
-        depth_sub = message_filters.Subscriber('/camera/aligned_depth_to_color/image_raw', Image)
+        depth_sub = message_filters.Subscriber('/camera/depth/image_rect_raw', Image)
         self.model_pub = rospy.Publisher("/onigiriCloud", PointCloud2, queue_size=30)
         self.pose_pub = rospy.Publisher('/onigiriPose', PoseArray, queue_size = 30)
         self.pose_sub = rospy.Subscriber('/onigiriPose', PoseArray, self.poseCallback, queue_size = 30)
@@ -280,24 +280,20 @@ class DenseFusion:
             my_t = (points.view(bs * num_points, 1, 3) + pred_t)[which_max[0]].view(-1).cpu().data.numpy()
             my_pred = np.append(my_r, my_t)
 
+
+            """ offset to align with obj-center """
+            # get mean depth within a box as depth offset
+            depth = self.depth[rmin : rmax, cmin : cmax].astype(float)
+            depZ,_,_,_ = cv2.mean(depth)
+            my_t[2] = depZ
+
             """ DF refiner NOTE: results are better without refiner """
-            # my_t, my_r = self.pose_refiner(1, my_t.T, my_r.T, points, emb, idx)
+            # my_t, my_r = self.pose_refiner(3, my_t.T, my_r.T, points, emb, idx)
+            # my_t, my_r = self.pose_refiner(1, my_t, my_r, points, emb, idx)
 
             """ position mm2m """
             my_t = np.array(my_t*mm2m)
             # print("Pos xyz:{0}".format(my_t))
-
-            """ get mean depth within a box as depth offset """
-            depth = self.depth[rmin : rmax, cmin : cmax].astype(float)
-            depth = depth * mm2m
-            depZ,_,_,_ = cv2.mean(depth)
-
-            """ offset to align with obj-center """
-            print("mean depth ", depZ)
-            # objC = np.array([0.0, 0.0, depZ])
-            # objC = np.array([0.0, 0.0, 0.])
-            # my_t =  my_t - objC
-            my_t[2] = depZ
 
             """ rotation """
             mat_r = quaternion_matrix(my_r)[:3, :3]
