@@ -13,7 +13,7 @@ else:
 
 # specify which gpu to use
 os.environ['CUDA_DEVICE_ORDER']='PCI_BUS_ID'
-os.environ['CUDA_VISIBLE_DEVICES']='1' # '0,1,2,3'
+os.environ['CUDA_VISIBLE_DEVICES']='0' # '0,1,2,3'
 
 num_objects = 1
 num_points = 100
