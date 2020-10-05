@@ -47,10 +47,19 @@
 * `python3 scripts/densefusion_cam.py`
 *  launch rviz `roslaunch densefusion_ros densefusion_cam.launch`
 *  Use `ESC` to stop
-*  NOTE: [pcd doesn't update, possible Rviz memory leaking issue]
+*  NOTE: `[pcd doesn't update, possible Rviz memory leaking issue]`
 
 
 <br />
 
 # Test with rgbd images [not updated]
 `python3 scripts/densefusion_img.py`
+
+
+
+<br />
+
+# Known issues
+* `Mask-rcnn is slow`, takes more than 0.5 seconds to process single frame
+* if `no onigiri detected` msg appears, that would mean depth camera is unable to distinguish between object and background, in such case, change your object location.
+* if using `densefusion_cam.py`, RGBD pointCloud won't update properly, due to probable RVIZ pointCloud memory leaking bug. Rely on 2D image output.
