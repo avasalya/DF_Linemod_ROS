@@ -382,7 +382,7 @@ def main():
 
             ''' publish to ros '''
             Publisher(df.model_pub, df.pose_pub, cam_mat, dist,
-                    df.viz, df.objs_pose, df.modelPts, pcdPts, 'World', method)
+                    df.viz, df.objs_pose, df.modelPts, pcdPts, 'World', method='open3d')
 
             t2 = time.time()
             print('inference time is :{0}'.format(t2 - t1))
@@ -414,10 +414,5 @@ if __name__ == '__main__':
     t0 = time.time()
 
     autostop = 10000
-
-    # which method to use for publishing rgbd pointcloud
-    # 'realsense' or 'open3d'
-    method = 'open3d'
-
     main()
 # %%

@@ -174,7 +174,7 @@ def Publisher(model_pub, pose_pub, cam_mat, dist, viz, objs_pose, modelPts, clou
     headerPCD.frame_id = frame
     scaled_cloud = PointCloud2()
 
-    if frame == 'World': # this has no effect when using ros for rgb-d frames
+    if frame == 'World': # this has no effect when using realsense-ros pkg for rgb-d frames
 
         if method == 'open3d':
             pinhole_camera_intrinsic = o3d.camera.PinholeCameraIntrinsic(o3d.camera.PinholeCameraIntrinsicParameters.PrimeSenseDefault)
