@@ -157,7 +157,7 @@ class DenseFusion:
         for ite in range(0, iteration):
             T = Variable(torch.from_numpy(my_t.astype(np.float32))).cuda().view(1, 3).repeat(num_points, 1).contiguous().view(1, num_points, 3)
             my_mat = quaternion_matrix(my_r)
-            R = Variable(torch.from_numpy(my_mat[:3, :3].astype(np.float32))).cuda().view(1, 3, 3)
+            R = Variable(torch.from_numpy(my_mat[:3, :3].T.astype(np.float32))).cuda().view(1, 3, 3)
             my_mat[0:3, 3] = my_t
 
             new_points = torch.bmm((points - T), R).contiguous()
@@ -277,8 +277,7 @@ class DenseFusion:
             # my_t[2] = depZ
 
             ''' DF refiner NOTE: results are better without refiner '''
-            # my_t, my_r = self.pose_refiner(1, my_t.T, my_r.T, points, emb, idx)
-            # my_t, my_r = self.pose_refiner(1, my_t, my_r, points, emb, idx)
+            # my_t, my_r = self.pose_refiner(3, my_t, my_r, points, emb, idx)
 
             ''' position mm2m '''
             my_t = np.array(my_t*mm2m)
