@@ -121,6 +121,12 @@ class DenseFusion:
         depth = np.frombuffer(depth.data, dtype=np.uint16).reshape(depth.height, depth.width, -1)
         rgb = np.frombuffer(rgb.data, dtype=np.uint8).reshape(rgb.height, rgb.width, -1)
 
+        # visualize depth
+        convertDepth = depth.copy()
+        convertDepth = cv2.normalize(convertDepth, None, alpha = 0, beta = 1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F)
+        cv2.imshow("depth ros2numpy", convertDepth), cv2.waitKey(1)
+        print(convertDepth.shape)
+
         try:
             ''' estimate pose '''
             self.pose_estimator(rgb, depth)
