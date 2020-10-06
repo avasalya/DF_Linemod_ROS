@@ -66,14 +66,22 @@ def DrawDot(g_draw, point, pointColor, pointRadius):
                     outline=pointColor
                     )
 
-def draw_cube(tar, img, g_draw, color, cam_mat):
+def draw_cube(tar, img, g_draw, color, cam_mat, bbox):
 
     cam_fx = cam_mat[0,0]
     cam_cx = cam_mat[0,2]
     cam_fy = cam_mat[1,1]
     cam_cy = cam_mat[1,2]
 
-    # pinhole camera model/ project the cubeoid on the image plane using camera intrinsics
+    pbox1 = bbox[0]
+    pbox2 = bbox[1]
+    pbox3 = bbox[2]
+    pbox4 = bbox[3]
+    center = ( pbox2 + int((pbox2 - pbox1)/2), pbox4 + int((pbox4- pbox3)/2) )
+    bboxPoints2D = [list((pbox1, pbox3)), list((pbox2, pbox3)), list((pbox1, pbox4)), list((pbox2, pbox4))]
+    # print("bboxPoints2D", bboxPoints2D)
+
+    """ pinhole camera model/ project the cubeoid on the image plane using camera intrinsics """
     # u = fx * x/z + cx
     # v = fy * y/z + cy
     # https://docs.opencv.org/master/d9/d0c/group__calib3d.html#ga50620f0e26e02caa2e9adc07b5fbf24e
@@ -86,12 +94,13 @@ def draw_cube(tar, img, g_draw, color, cam_mat):
     p6 = (int((tar[6][0]/ tar[6][2])*cam_fx + cam_cx),  int((tar[6][1]/ tar[6][2])*cam_fy + cam_cy))
     p7 = (int((tar[7][0]/ tar[7][2])*cam_fx + cam_cx),  int((tar[7][1]/ tar[7][2])*cam_fy + cam_cy))
 
-    ''' PnP for refinement '''
     points2D = [list(p0), list(p1), list(p2), list(p3), list(p4), list(p5), list(p6), list(p7)]
+    # print("points2d", points2D)
 
+    ''' PnP for refinement '''
     pnpSolver = CuboidPNPSolver('txonigiri',
                                 camera_intrinsic_matrix = cam_mat,
-                                cuboid3d=Cuboid3d(size3d = [4., 4., 4.]))
+                                cuboid3d=Cuboid3d(size3d = [2., 2., 2.]))
     location, quaternion, projected_points = pnpSolver.solve_pnp(points2D)
     # rvec, tvec = cv2.solvePnPRefineVVS(modelPts, cloudPts, cam_mat, dist, rot_, my_t)
 
@@ -137,31 +146,6 @@ def draw_cube(tar, img, g_draw, color, cam_mat):
     DrawLine(g_draw, points[0], points[5], color, lineWidthForDrawing)
     DrawLine(g_draw, points[1], points[4], color, lineWidthForDrawing)
 
-
-    r = 255 # int(np.random.choice(range(255)))
-    g = 255 # int(np.random.choice(range(255)))
-    b = 255 # int(np.random.choice(range(255)))
-
-    # cv2.line(img, p0, p1, (0,0,b), 2)
-    # cv2.line(img, p0, p3, (r,0,0), 2)
-    # cv2.line(img, p0, p4, (0,g,0), 2)
-
-    # cv2.line(img, p0, p1, color, 2)
-    # cv2.line(img, p0, p3, color, 2)
-    # cv2.line(img, p0, p4, color, 2)
-    # cv2.line(img, p1, p2, color, 2)
-    # cv2.line(img, p1, p5, color, 2)
-    # cv2.line(img, p2, p3, color, 2)
-    # cv2.line(img, p2, p6, color, 2)
-    # cv2.line(img, p3, p7, color, 2)
-    # cv2.line(img, p4, p5, color, 2)
-    # cv2.line(img, p4, p7, color, 2)
-    # cv2.line(img, p5, p6, color, 2)
-    # cv2.line(img, p6, p7, color, 2)
-
-    # print(p0, p1, p2, p3, p4, p5, p6, p7)
-    # cv2.rectangle(img, p0, p7, (0,0,255))
-
     return location, quaternion, projected_points
 
 def Publisher(model_pub, pose_pub, cam_mat, dist, viz, objs_pose, modelPts, cloudPts, frame, method):
@@ -183,14 +167,11 @@ def Publisher(model_pub, pose_pub, cam_mat, dist, viz, objs_pose, modelPts, clou
             pcd.translate((0,0,1.5))
 
             pcdPts = np.asarray(pcd.points)
-            print('PCD actual size', pcdPts.shape)
-            print('PCD actual len', len(pcdPts))
-
-            sampleSize = 50000
+            sampleSize = int(len(pcdPts)/6)
+            print('PCD downsampled from {} to {}'.format(len(pcdPts), sampleSize))
             downSamples = rand.sample(range(0, len(pcdPts)), sampleSize)
             pcdPts = pcdPts[downSamples, :]
 
-            print('PCD downsampled to', pcdPts.shape)
             scaled_cloud = pcl2.create_cloud_xyz32(headerPCD, pcdPts)
             model_pub.publish(scaled_cloud)
 

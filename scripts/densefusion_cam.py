@@ -294,6 +294,7 @@ class DenseFusion:
 
             ''' draw cmr 2D box '''
             cv2.rectangle(viz, (cmax, cmin), (rmax, rmin), (255,0,0))
+            # print((cmax, cmin), (rmax, rmin))
 
             ''' introduce offset in Rot '''
             Rx = rotation_matrix(2*m.pi/3, [1, 0, 0], my_t)
@@ -303,16 +304,17 @@ class DenseFusion:
             mat_r = np.dot(mat_r.T, offR[:3, :3])
 
             ''' transform 3D box and axis with estimated pose and Draw '''
-            # target_df = np.dot(edges, mat_r) + my_t
-            # new_image = cv2pil(viz)
-            # g_draw = ImageDraw.Draw(new_image)
-            # location, quaternion, projected_points = draw_cube(target_df, viz, g_draw, (255, 255, 255), cam_mat)
-            # viz = pil2cv(new_image)
+            target_df = np.dot(edges, mat_r) + my_t
+            new_image = cv2pil(viz)
+            g_draw = ImageDraw.Draw(new_image)
+            tvec, rvec, projected_points = draw_cube(target_df, viz, g_draw, (255, 255, 255), cam_mat, bbox[b])
+            viz = pil2cv(new_image)
+            print(f"{Fore.RED} PNP Pos{Style.RESET_ALL}", np.asarray(tvec) *0.01)
 
             ''' convert pose to ros-msg '''
             I = np.identity(4)
-            I[0:3, 0:3] = mat_r
-            I[0:3, -1] = my_t# + np.asarray(location) *0.01 #cm2m
+            I[0:3, 0:3] = quaternion_matrix(rvec)[0:3, 0:3] #np.dot(mat_r.T, quaternion_matrix(rvec)[0:3, 0:3])
+            I[0:3, -1] = my_t + np.asarray(tvec) *0.01 #cm2m
             rot = quaternion_from_matrix(I, True) #wxyz
             my_t = my_t.reshape(1,3)
             pose = {

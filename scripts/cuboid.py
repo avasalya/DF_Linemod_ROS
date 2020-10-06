@@ -81,6 +81,7 @@ class Cuboid3d():
         # By default just use the normal OpenCV coordinate system
         if (self.coord_system is None):
             cx, cy, cz = self.center_location
+
             # X axis point to the right
             right = cx + width / 2.0
             left = cx - width / 2.0

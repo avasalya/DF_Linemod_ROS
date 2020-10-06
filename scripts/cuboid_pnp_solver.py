@@ -19,8 +19,8 @@ class CuboidPNPSolver(object):
     cv2version = cv2.__version__.split('.')
     cv2majorversion = int(cv2version[0])
 
-    def __init__(self, object_name="", camera_intrinsic_matrix = None, cuboid3d = None,
-            dist_coeffs = np.zeros((4, 1))):
+    def __init__(self, object_name="", camera_intrinsic_matrix = None, cuboid3d = None, dist_coeffs = np.zeros((4, 1))):
+
         self.object_name = object_name
         if (not camera_intrinsic_matrix is None):
             self._camera_intrinsic_matrix = camera_intrinsic_matrix
@@ -55,9 +55,9 @@ class CuboidPNPSolver(object):
                 pnp_algorithm = cv2.CV_ITERATIVE
             elif CuboidPNPSolver.cv2majorversion == 4:
                 pnp_algorithm = cv2.SOLVEPNP_ITERATIVE
-                # Alternative algorithms:
-                # pnp_algorithm = SOLVE_PNP_P3P
-                # pnp_algorithm = SOLVE_PNP_EPNP
+                # pnp_algorithm = cv2.SOLVEPNP_AP3P
+                # pnp_algorithm = cv2.SOLVEPNP_P3P
+
 
         location = None
         quaternion = None
