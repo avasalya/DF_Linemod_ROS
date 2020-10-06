@@ -55,8 +55,8 @@ class CuboidPNPSolver(object):
                 pnp_algorithm = cv2.CV_ITERATIVE
             elif CuboidPNPSolver.cv2majorversion == 4:
                 pnp_algorithm = cv2.SOLVEPNP_ITERATIVE
-                # pnp_algorithm = cv2.SOLVEPNP_AP3P
-                # pnp_algorithm = cv2.SOLVEPNP_P3P
+                # pnp_algorithm = cv2.SOLVEPNP_AP3P # only 4 points
+                # pnp_algorithm = cv2.SOLVEPNP_P3P # only 4 points
 
 
         location = None

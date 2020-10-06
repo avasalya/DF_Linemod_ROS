@@ -203,13 +203,16 @@ class DenseFusion:
         rgb_original = self.rgb
         norm = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
 
-        all_masks = []
-        # self.depth = depth.reshape(480, 640)
         mask_depth = ma.getmaskarray(ma.masked_not_equal(self.depth, 0))
         mask_label = ma.getmaskarray(ma.masked_equal(pred, np.array(255)))
 
         # iterate through detected masks
         for b in range(len(bbox)):
+
+            ''' visualize mask '''
+            # mk  = pil2cv(mask_label[:,:,b])
+            # mk  = cv2.normalize(mk, None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F)
+            # cv2.imshow("mask label", mk), cv2.waitKey(1)
 
             mask = mask_depth * mask_label[:,:,b]
             rmin = int(bbox[b,0])
@@ -303,7 +306,7 @@ class DenseFusion:
             offR = concatenate_matrices(Rx, Ry, Rz)[:3,:3]
             mat_r = np.dot(mat_r.T, offR[:3, :3])
 
-            ''' transform 3D box and axis with estimated pose and Draw '''
+            ''' transform 3D box and axis with estimated PNP pose and Draw cube'''
             target_df = np.dot(edges, mat_r) + my_t
             new_image = cv2pil(viz)
             g_draw = ImageDraw.Draw(new_image)
@@ -330,7 +333,7 @@ class DenseFusion:
             self.viz = viz
         else:
             if len(bbox) < 1:
-                print(f'{Fore.RED}unable to detect pose..{Style.RESET_ALL}')
+                print(f'{Fore.RED}unable to detect onigiri..{Style.RESET_ALL}')
 
         self.objs_pose = obj_pose
 

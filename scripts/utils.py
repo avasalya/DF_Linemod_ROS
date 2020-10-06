@@ -200,8 +200,6 @@ def Publisher(model_pub, pose_pub, cam_mat, dist, viz, objs_pose, modelPts, clou
                 model_pub.publish(scaled_cloud)
                 del cloudPts
 
-
-
     ''' publish pose to ros-msg '''
     if objs_pose is not None:
 
@@ -238,7 +236,5 @@ def Publisher(model_pub, pose_pub, cam_mat, dist, viz, objs_pose, modelPts, clou
                 sys.exit(1)
             except SystemExit:
                 os._exit(0)
-
-
     else:
-        print(f'{Fore.RED}no onigiri detected{Style.RESET_ALL}')
+        print(f'{Fore.RED}onigiri pose not detected{Style.RESET_ALL}')
