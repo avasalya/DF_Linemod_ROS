@@ -337,7 +337,7 @@ class DenseFusion:
         print(f'{Fore.YELLOW}DenseFusion inference time is:{Style.RESET_ALL}', t3 - t2)
 
 
-def main():
+def main(method):
     try:
         rospy.init_node('onigiriPose', anonymous=False)
         rospy.loginfo('ros node initiated...')
@@ -382,7 +382,7 @@ def main():
 
             ''' publish to ros '''
             Publisher(df.model_pub, df.pose_pub, cam_mat, dist,
-                    df.viz, df.objs_pose, df.modelPts, pcdPts, 'World', method='open3d')
+                    df.viz, df.objs_pose, df.modelPts, pcdPts, 'World', method)
 
             t2 = time.time()
             print('inference time is :{0}'.format(t2 - t1))
@@ -414,5 +414,9 @@ if __name__ == '__main__':
     t0 = time.time()
 
     autostop = 10000
-    main()
+
+    method = 'open3d' #defaut pcd
+
+    main(method)
+
 # %%
