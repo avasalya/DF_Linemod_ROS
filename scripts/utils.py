@@ -249,15 +249,15 @@ def Publisher(model_pub, pose_pub, cam_mat, dist, viz, objs_pose, modelPts, clou
 
         pose_pub.publish(pose_array)
 
-        if frame == 'World':
-            cv2.imshow('pose', cv2.cvtColor(viz, cv2.COLOR_BGR2RGB))
-            key = cv2.waitKey(1) & 0xFF # stop script
-            if  key == 27:
-                rospy.loginfo(f'{Fore.RED}stopping streaming...{Style.RESET_ALL}')
-                try:
-                    sys.exit(1)
-                except SystemExit:
-                    os._exit(0)
+        # if frame == 'World':
+        cv2.imshow('pose', cv2.cvtColor(viz, cv2.COLOR_BGR2RGB))
+        key = cv2.waitKey(1) & 0xFF # stop script
+        if  key == 27:
+            rospy.loginfo(f'{Fore.RED}stopping streaming...{Style.RESET_ALL}')
+            try:
+                sys.exit(1)
+            except SystemExit:
+                os._exit(0)
 
 
     else:
