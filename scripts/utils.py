@@ -184,6 +184,7 @@ def Publisher(model_pub, pose_pub, cam_mat, dist, viz, objs_pose, modelPts, clou
 
             pcdPts = np.asarray(pcd.points)
             print('PCD actual size', pcdPts.shape)
+            print('PCD actual len', len(pcdPts))
 
             sampleSize = 50000
             downSamples = rand.sample(range(0, len(pcdPts)), sampleSize)

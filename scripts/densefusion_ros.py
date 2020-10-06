@@ -125,7 +125,6 @@ class DenseFusion:
         convertDepth = depth.copy()
         convertDepth = cv2.normalize(convertDepth, None, alpha = 0, beta = 1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F)
         cv2.imshow("depth ros2numpy", convertDepth), cv2.waitKey(1)
-        print(convertDepth.shape)
 
         try:
             ''' estimate pose '''
@@ -292,14 +291,13 @@ class DenseFusion:
             my_t = (points.view(bs * num_points, 1, 3) + pred_t)[which_max[0]].view(-1).cpu().data.numpy()
             my_pred = np.append(my_r, my_t)
 
-
-            ''' offset to align with obj-center '''
+            ''' offset (mm) to align with obj-center '''
             # get mean depth within a box as depth offset
             depth = self.depth[rmin : rmax, cmin : cmax].astype(float)
             depZ,_,_,_ = cv2.mean(depth)
-            # my_t[0] = my_t[0] - 0.01
-            # my_t[1] = my_t[1] + 0.1
-            my_t[2] = depZ
+            my_t[2] = depZ + 120 #+objHeight
+            # my_t[0] = my_t[0] - 80
+            # my_t[1] = my_t[1] - 60
 
             ''' DF refiner NOTE: results are better without refiner '''
             # my_t, my_r = self.pose_refiner(3, my_t.T, my_r.T, points, emb, idx)
@@ -331,7 +329,7 @@ class DenseFusion:
             ''' convert pose to ros-msg '''
             I = np.identity(4)
             I[0:3, 0:3] = mat_r
-            I[0:3, -1] = my_t# + np.asarray(location) *0.01 #cm2m
+            I[0:3, -1] = my_t
             rot = quaternion_from_matrix(I, True) #wxyz
             my_t = my_t.reshape(1,3)
             pose = {
