@@ -293,6 +293,7 @@ class DenseFusion:
 
             ''' offset (mm) to align with obj-center '''
             # get mean depth within a box as depth offset
+            # NOTE: remove NAN and Zeros before taking depth mean
             depth = self.depth[rmin : rmax, cmin : cmax].astype(float)
             depZ,_,_,_ = cv2.mean(depth)
             my_t[2] = depZ + 120 #+objHeight

@@ -269,6 +269,7 @@ class DenseFusion:
             my_pred = np.append(my_r, my_t)
 
             ''' get mean depth within a box as depth offset '''
+            # NOTE: remove NAN and Zeros before taking depth mean
             depth = self.depth[rmin : rmax, cmin : cmax].astype(float)
             # depth = depth * mm2m
             depZ,_,_,_ = cv2.mean(depth)
