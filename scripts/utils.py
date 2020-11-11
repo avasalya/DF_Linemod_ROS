@@ -183,7 +183,6 @@ def Publisher(model_pub, pose_pub, cam_mat, dist, viz, objs_pose, modelPts, clou
                 model_pub.publish(scaled_cloud)
                 del pcd
 
-
         if method == 'realsense':
             sampleSize = 50000
             downSamples = rand.sample(range(0, len(cloudPts)), sampleSize)

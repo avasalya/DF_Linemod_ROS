@@ -135,7 +135,7 @@ class DenseFusion:
                     self.viz, self.objs_pose, self.modelPts, self.cloudPts, 'camera_depth_optical_frame', method=None)
 
         except rospy.ROSException:
-            print(f'{Fore.RED}ROS Intruptted')
+            print(f'{Fore.RED}ROS Interrupted')
 
     def batch_predict(self):
 
