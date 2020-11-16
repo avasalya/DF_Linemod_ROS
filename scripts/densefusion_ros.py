@@ -38,17 +38,17 @@ print('maskrcnn model loaded...')
 
 pose = PoseNet(num_points, num_objects)
 pose.cuda()
-pose.load_state_dict(torch.load(path + '/../txonigiri/pose_model.pth'))
+pose.load_state_dict(torch.load(path + '/../txonigiri/pose_modelv2.pth'))
 pose.eval()
 print('pose model loaded...')
 
 refiner = PoseRefineNet(num_points, num_objects)
 refiner.cuda()
-refiner.load_state_dict(torch.load(path + '/../txonigiri/pose_refine_model.pth'))
+refiner.load_state_dict(torch.load(path + '/../txonigiri/pose_refine_modelv2.pth'))
 refiner.eval()
 print('pose refine model loaded...')
 
-filepath = (path + '/../txonigiri/txonigiri.ply')
+filepath = (path + '/../txonigiri/txonigiriv2.ply')
 mesh_model = o3d.io.read_triangle_mesh(filepath)
 randomIndices = rand.sample(range(0, 9958), num_points)
 print('object mesh model loaded...')
@@ -65,7 +65,6 @@ cam_cx = 320.075
 cam_fy = 605.699
 cam_cy = 247.877
 
-dist = np.array([0.0, 0.0, 0.0, 0.0, 0.0])
 cam_mat = np.matrix([ [cam_fx, 0, cam_cx], [0, cam_fy, cam_cy], [0, 0, 1] ])
 
 edge = 60.
@@ -107,7 +106,7 @@ class DenseFusion:
         self.refiner = refiner
         self.object_index = object_index_
 
-        self.modelPts = np.asarray(mesh_model.vertices) * 0.01 #change units
+        self.modelPts = np.asarray(mesh_model.vertices) #* 0.01 #change units
         self.modelPts = self.modelPts[randomIndices, :]
 
         self.xmap = np.array([[j for i in range(640)] for j in range(480)])
@@ -131,7 +130,7 @@ class DenseFusion:
             self.pose_estimator(rgb, depth)
 
             ''' publish to ros '''
-            Publisher(self.model_pub, self.pose_pub, cam_mat, dist,
+            Publisher(self.model_pub, self.pose_pub, cam_mat,
                     self.viz, self.objs_pose, self.modelPts, self.cloudPts, 'camera_depth_optical_frame', method=None)
 
         except rospy.ROSException:
@@ -212,8 +211,10 @@ class DenseFusion:
         key = cv2.waitKey(1) & 0xFF
         if key == 27:
             try:
+                print('sys.exit')
                 sys.exit(1)
             except SystemExit:
+                print('os.exit')
                 os._exit(0)
 
         t2 = time.time()
@@ -264,12 +265,12 @@ class DenseFusion:
             choose = np.array([choose])
             choose = torch.LongTensor(choose.astype(np.int32))
 
-            cam_scale = mm2m
+            cam_scale = 1 #mm2m
             pt2 = depth_masked/cam_scale
             pt0 = (ymap_masked - cam_cx) * pt2 / cam_fx
             pt1 = (xmap_masked - cam_cy) * pt2 / cam_fy
             cloud = np.concatenate((pt0, pt1, pt2), axis=1)
-            cloud = cloud /1000
+            # cloud = cloud /1000
             points = torch.from_numpy(cloud.astype(np.float32))
 
             img_masked = img[:, rmin : rmax, cmin : cmax ]
@@ -294,11 +295,11 @@ class DenseFusion:
             ''' offset (mm) to align with obj-center '''
             # get mean depth within a box as depth offset
             # NOTE: remove NAN and Zeros before taking depth mean
-            depth = self.depth[rmin : rmax, cmin : cmax].astype(float)
+            # depth = self.depth[rmin : rmax, cmin : cmax].astype(float)
             depZ,_,_,_ = cv2.mean(depth)
-            my_t[2] = depZ + 120 #+objHeight
-            # my_t[0] = my_t[0] - 80
-            # my_t[1] = my_t[1] - 60
+            my_t[2] = depZ + 60 #+objHeight*.5
+            my_t[0] = my_t[0] + 20
+            my_t[1] = my_t[1] - 20
 
             ''' DF refiner NOTE: results are better without refiner '''
             my_t, my_r = self.pose_refiner(2, my_t, my_r, points, emb, idx)
@@ -309,22 +310,42 @@ class DenseFusion:
 
             ''' rotation '''
             mat_r = quaternion_matrix(my_r)[:3, :3]
+            # mat_r = mat_r.transpose()
             # print('estimated rotation is\n:{0}'.format(mat_r))
 
             ''' project depth point cloud '''
-            imgpts_cloud, jac = cv2.projectPoints(np.dot(points.cpu().numpy(), mat_r), mat_r, my_t, cam_mat, dist)
+            imgpts_cloud, jac = cv2.projectPoints(np.dot(points.cpu().numpy(), mat_r), mat_r, my_t, cam_mat, None)
             viz = draw_pointCloud(viz, imgpts_cloud, [255, 0, 0]) # cloudPts
             self.cloudPts = imgpts_cloud.reshape(num_points, 2)
 
             ''' draw cmr 2D box '''
             cv2.rectangle(viz, (cmax, cmin), (rmax, rmin), (255,0,0))
 
-            ''' introduce offset in Rot '''
-            Rx = rotation_matrix(2*m.pi/3, [1, 0, 0], my_t)
-            Ry = rotation_matrix(10*m.pi/180, [0, 1, 0], my_t)
-            Rz = rotation_matrix(5*m.pi/180, [0, 0, 1], my_t)
-            offR = concatenate_matrices(Rx, Ry, Rz)[:3,:3]
-            mat_r = np.dot(mat_r.T, offR[:3, :3])
+            ''' project the 3D bounding-box to 2D image plane '''
+            min_point = np.min(self.modelPts, axis=0)
+            max_point = np.max(self.modelPts, axis=0)
+            min_max = [[a,b] for a,b in zip(min_point, max_point)]
+            #[[x_min, x_max], [y_min, y_max], [z_min, z_max]]
+
+            vertices = itertools.product(*min_max)
+            vertices = np.asarray(list(vertices))
+            cuboid = cv2.projectPoints(vertices, mat_r, my_t, cam_mat, None)[0]
+            cuboid = np.transpose(np.asarray(cuboid), (1,0,2))[0]
+            cuboid = [tuple(map(int, point)) for point in cuboid]
+
+            line_width = 2
+            cv2.line(viz, cuboid[0], cuboid[1], (255,255,255), line_width)
+            cv2.line(viz, cuboid[0], cuboid[2], (255,255,255), line_width)
+            cv2.line(viz, cuboid[0], cuboid[4], (255,255,255), line_width)
+            cv2.line(viz, cuboid[1], cuboid[3], (255,255,255), line_width)
+            cv2.line(viz, cuboid[1], cuboid[5], (255,255,255), line_width)
+            cv2.line(viz, cuboid[2], cuboid[3], (255,255,255), line_width)
+            cv2.line(viz, cuboid[2], cuboid[6], (255,255,255), line_width)
+            cv2.line(viz, cuboid[3], cuboid[7], (255,255,255), line_width)
+            cv2.line(viz, cuboid[4], cuboid[5], (255,255,255), line_width)
+            cv2.line(viz, cuboid[4], cuboid[6], (255,255,255), line_width)
+            cv2.line(viz, cuboid[5], cuboid[7], (255,255,255), line_width)
+            cv2.line(viz, cuboid[6], cuboid[7], (255,255,255), line_width)
 
             ''' convert pose to ros-msg '''
             I = np.identity(4)
@@ -364,7 +385,7 @@ def main():
 
     try:
         rospy.spin()
-        rate = rospy.Rate(1)
+        rate = rospy.Rate(10)
         while not rospy.is_shutdown():
             rate.sleep()
     except KeyboardInterrupt:

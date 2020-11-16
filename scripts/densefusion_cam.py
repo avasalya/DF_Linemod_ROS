@@ -40,17 +40,17 @@ print('maskrcnn model loaded %s' % pretrained_model)
 
 pose = PoseNet(num_points, num_objects)
 pose.cuda()
-pose.load_state_dict(torch.load(path + '/../txonigiri/pose_model.pth'))
+pose.load_state_dict(torch.load(path + '/../txonigiri/pose_modelv2.pth'))
 pose.eval()
 print('pose model loaded...')
 
 refiner = PoseRefineNet(num_points, num_objects)
 refiner.cuda()
-refiner.load_state_dict(torch.load(path + '/../txonigiri/pose_refine_model.pth'))
+refiner.load_state_dict(torch.load(path + '/../txonigiri/pose_refine_modelv2.pth'))
 refiner.eval()
 print('pose refine model loaded...')
 
-filepath = (path + '/../txonigiri/txonigiri.ply')
+filepath = (path + '/../txonigiri/txonigiri2.ply')
 mesh_model = o3d.io.read_triangle_mesh(filepath)
 randomIndices = rand.sample(range(0, 9958), num_points)
 print('object mesh model loaded...')
@@ -67,7 +67,6 @@ cam_cx = 320.075
 cam_fy = 605.699
 cam_cy = 247.877
 
-dist = np.array([0.0, 0.0, 0.0, 0.0, 0.0])
 cam_mat = np.array([ [cam_fx, 0, cam_cx], [0, cam_fy, cam_cy], [0, 0, 1] ])
 
 edge = 60.
@@ -292,7 +291,7 @@ class DenseFusion:
             # print('estimated rotation is\n:{0}'.format(mat_r))
 
             ''' project point cloud '''
-            imgpts_cloud,_ = cv2.projectPoints(np.dot(points.cpu().numpy(), mat_r), mat_r, my_t, cam_mat, dist)
+            imgpts_cloud,_ = cv2.projectPoints(np.dot(points.cpu().numpy(), mat_r), mat_r, my_t, cam_mat, None)
             viz = draw_pointCloud(viz, imgpts_cloud, [255, 0, 0])
             self.cloudPts = imgpts_cloud.reshape(num_points, 2)
 
@@ -386,7 +385,7 @@ def main(method):
             df.pose_estimator()
 
             ''' publish to ros '''
-            Publisher(df.model_pub, df.pose_pub, cam_mat, dist,
+            Publisher(df.model_pub, df.pose_pub, cam_mat,
                     df.viz, df.objs_pose, df.modelPts, pcdPts, 'World', method)
 
             t2 = time.time()

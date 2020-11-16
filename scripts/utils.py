@@ -16,7 +16,7 @@ def makeRortho(R):
 def draw_axis(img, R, t, K):
     # How+to+draw+3D+Coordinate+Axes+with+OpenCV+for+face+pose+estimation%3f
     rotV, _ = cv2.Rodrigues(R)
-    points = np.float32([[.1, 0, 0], [0, .1, 0], [0, 0, .1], [0, 0, 0]]).reshape(-1, 3)
+    points = np.float32([[.05, 0, 0], [0, .05, 0], [0, 0, .05], [0, 0, 0]]).reshape(-1, 3)
     axisPoints, _ = cv2.projectPoints(points, rotV, t, K, (0, 0, 0, 0))
     img = cv2.line(img, tuple(axisPoints[3].ravel()), tuple(axisPoints[0].ravel()), (255,0,0), 3)
     img = cv2.line(img, tuple(axisPoints[3].ravel()), tuple(axisPoints[1].ravel()), (0,255,0), 3)
@@ -148,7 +148,7 @@ def draw_cube(tar, img, g_draw, color, cam_mat, bbox):
 
     return location, quaternion, projected_points
 
-def Publisher(model_pub, pose_pub, cam_mat, dist, viz, objs_pose, modelPts, cloudPts, frame, method):
+def Publisher(model_pub, pose_pub, cam_mat, viz, objs_pose, modelPts, cloudPts, frame, method):
 
     global t1
 
@@ -158,7 +158,7 @@ def Publisher(model_pub, pose_pub, cam_mat, dist, viz, objs_pose, modelPts, clou
     headerPCD.frame_id = frame
     scaled_cloud = PointCloud2()
 
-    if frame == 'World': # this has no effect when using realsense-ros pkg for rgb-d frames
+    if frame == 'World': # NOTE: this has no effect when using realsense-ros pkg for rgb-d frames
 
         if method == 'open3d':
             pinhole_camera_intrinsic = o3d.camera.PinholeCameraIntrinsic(o3d.camera.PinholeCameraIntrinsicParameters.PrimeSenseDefault)

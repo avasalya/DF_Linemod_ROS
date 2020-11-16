@@ -4,6 +4,7 @@ import cv2
 import copy
 import time
 import getpass
+import itertools
 import math as m
 import numpy as np
 import open3d as o3d
