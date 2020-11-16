@@ -46,107 +46,41 @@ def cv2pil(image):
     new_image = pImage.fromarray(new_image)
     return new_image
 
-''' adapted from DOPE '''
-def DrawLine(g_draw, point1, point2, lineColor, lineWidth):
-    '''Draws line on image'''
-    if not point1 is None and point2 is not None:
-        g_draw.line([point1, point2], fill=lineColor, width=lineWidth)
+def draw_cube(modelPts, viz, rvec, tvec, cam_mat):
 
-def DrawDot(g_draw, point, pointColor, pointRadius):
-    '''Draws dot (filled circle) on image'''
-    if point is not None:
-        xy = [
-            point[0] - pointRadius,
-            point[1] - pointRadius,
-            point[0] + pointRadius,
-            point[1] + pointRadius
-        ]
-        g_draw.ellipse(xy,
-                    fill=pointColor,
-                    outline=pointColor
-                    )
+    min_point = np.min(modelPts, axis=0)
+    max_point = np.max(modelPts, axis=0)
+    min_max = [[a,b] for a,b in zip(min_point, max_point)]
+    #[[x_min, x_max], [y_min, y_max], [z_min, z_max]]
 
-def draw_cube(tar, img, g_draw, color, cam_mat, bbox):
+    vertices = itertools.product(*min_max)
+    vertices = np.asarray(list(vertices))
+    cuboid = cv2.projectPoints(vertices, rvec, tvec, cam_mat, None)[0]
+    cuboid = np.transpose(np.asarray(cuboid), (1,0,2))[0]
+    cuboid = [tuple(map(int, point)) for point in cuboid]
 
-    cam_fx = cam_mat[0,0]
-    cam_cx = cam_mat[0,2]
-    cam_fy = cam_mat[1,1]
-    cam_cy = cam_mat[1,2]
-
-    pbox1 = bbox[0]
-    pbox2 = bbox[1]
-    pbox3 = bbox[2]
-    pbox4 = bbox[3]
-    center = ( pbox2 + int((pbox2 - pbox1)/2), pbox4 + int((pbox4- pbox3)/2) )
-    bboxPoints2D = [list((pbox1, pbox3)), list((pbox2, pbox3)), list((pbox1, pbox4)), list((pbox2, pbox4))]
-    # print("bboxPoints2D", bboxPoints2D)
-
-    """ pinhole camera model/ project the cubeoid on the image plane using camera intrinsics """
-    # u = fx * x/z + cx
-    # v = fy * y/z + cy
-    # https://docs.opencv.org/master/d9/d0c/group__calib3d.html#ga50620f0e26e02caa2e9adc07b5fbf24e
-    p0 = (int((tar[0][0]/ tar[0][2])*cam_fx + cam_cx),  int((tar[0][1]/ tar[0][2])*cam_fy + cam_cy))
-    p1 = (int((tar[1][0]/ tar[1][2])*cam_fx + cam_cx),  int((tar[1][1]/ tar[1][2])*cam_fy + cam_cy))
-    p2 = (int((tar[2][0]/ tar[2][2])*cam_fx + cam_cx),  int((tar[2][1]/ tar[2][2])*cam_fy + cam_cy))
-    p3 = (int((tar[3][0]/ tar[3][2])*cam_fx + cam_cx),  int((tar[3][1]/ tar[3][2])*cam_fy + cam_cy))
-    p4 = (int((tar[4][0]/ tar[4][2])*cam_fx + cam_cx),  int((tar[4][1]/ tar[4][2])*cam_fy + cam_cy))
-    p5 = (int((tar[5][0]/ tar[5][2])*cam_fx + cam_cx),  int((tar[5][1]/ tar[5][2])*cam_fy + cam_cy))
-    p6 = (int((tar[6][0]/ tar[6][2])*cam_fx + cam_cx),  int((tar[6][1]/ tar[6][2])*cam_fy + cam_cy))
-    p7 = (int((tar[7][0]/ tar[7][2])*cam_fx + cam_cx),  int((tar[7][1]/ tar[7][2])*cam_fy + cam_cy))
-
-    points2D = [list(p0), list(p1), list(p2), list(p3), list(p4), list(p5), list(p6), list(p7)]
-    # print("points2d", points2D)
+    line_width = 2
+    cv2.line(viz, cuboid[0], cuboid[1], (255,255,255), line_width)
+    cv2.line(viz, cuboid[0], cuboid[2], (255,255,255), line_width)
+    cv2.line(viz, cuboid[0], cuboid[4], (255,255,255), line_width)
+    cv2.line(viz, cuboid[1], cuboid[3], (255,255,255), line_width)
+    cv2.line(viz, cuboid[1], cuboid[5], (255,255,255), line_width)
+    cv2.line(viz, cuboid[2], cuboid[3], (255,255,255), line_width)
+    cv2.line(viz, cuboid[2], cuboid[6], (255,255,255), line_width)
+    cv2.line(viz, cuboid[3], cuboid[7], (255,255,255), line_width)
+    cv2.line(viz, cuboid[4], cuboid[5], (255,255,255), line_width)
+    cv2.line(viz, cuboid[4], cuboid[6], (255,255,255), line_width)
+    cv2.line(viz, cuboid[5], cuboid[7], (255,255,255), line_width)
+    cv2.line(viz, cuboid[6], cuboid[7], (255,255,255), line_width)
 
     ''' PnP for refinement '''
     pnpSolver = CuboidPNPSolver('txonigiri',
                                 camera_intrinsic_matrix = cam_mat,
                                 cuboid3d=Cuboid3d(size3d = [2., 2., 2.]))
-    location, quaternion, projected_points = pnpSolver.solve_pnp(points2D)
+    tvec, rvec, projPoints = pnpSolver.solve_pnp(cuboid)
     # rvec, tvec = cv2.solvePnPRefineVVS(modelPts, cloudPts, cam_mat, dist, rot_, my_t)
 
-    points = []
-    points.append(tuple(projected_points[0]))
-    points.append(tuple(projected_points[1]))
-    points.append(tuple(projected_points[2]))
-    points.append(tuple(projected_points[3]))
-    points.append(tuple(projected_points[4]))
-    points.append(tuple(projected_points[5]))
-    points.append(tuple(projected_points[6]))
-    points.append(tuple(projected_points[7]))
-
-    '''
-    Draws cube with a thick solid line across
-    the front top edge and an X on the top face.
-    '''
-    lineWidthForDrawing = 2
-
-    # draw front
-    DrawLine(g_draw, points[0], points[1], color, lineWidthForDrawing)
-    DrawLine(g_draw, points[1], points[2], color, lineWidthForDrawing)
-    DrawLine(g_draw, points[3], points[2], color, lineWidthForDrawing)
-    DrawLine(g_draw, points[3], points[0], color, lineWidthForDrawing)
-
-    # draw back
-    DrawLine(g_draw, points[4], points[5], color, lineWidthForDrawing)
-    DrawLine(g_draw, points[6], points[5], color, lineWidthForDrawing)
-    DrawLine(g_draw, points[6], points[7], color, lineWidthForDrawing)
-    DrawLine(g_draw, points[4], points[7], color, lineWidthForDrawing)
-
-    # draw sides
-    DrawLine(g_draw, points[0], points[4], color, lineWidthForDrawing)
-    DrawLine(g_draw, points[7], points[3], color, lineWidthForDrawing)
-    DrawLine(g_draw, points[5], points[1], color, lineWidthForDrawing)
-    DrawLine(g_draw, points[2], points[6], color, lineWidthForDrawing)
-
-    # draw dots
-    DrawDot(g_draw, points[0], pointColor=(0,101,255), pointRadius=4)
-    DrawDot(g_draw, points[1], pointColor=(232,12,217), pointRadius=4)
-
-    # draw x on the top
-    DrawLine(g_draw, points[0], points[5], color, lineWidthForDrawing)
-    DrawLine(g_draw, points[1], points[4], color, lineWidthForDrawing)
-
-    return location, quaternion, projected_points
+    return tvec, rvec, projPoints
 
 def Publisher(model_pub, pose_pub, cam_mat, viz, objs_pose, modelPts, cloudPts, frame, method):
 

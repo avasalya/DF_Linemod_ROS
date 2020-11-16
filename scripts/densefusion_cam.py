@@ -50,7 +50,7 @@ refiner.load_state_dict(torch.load(path + '/../txonigiri/pose_refine_modelv2.pth
 refiner.eval()
 print('pose refine model loaded...')
 
-filepath = (path + '/../txonigiri/txonigiri2.ply')
+filepath = (path + '/../txonigiri/txonigiriv2.ply')
 mesh_model = o3d.io.read_triangle_mesh(filepath)
 randomIndices = rand.sample(range(0, 9958), num_points)
 print('object mesh model loaded...')
@@ -110,7 +110,7 @@ class DenseFusion:
         self.cloudPts = None
         self.poseArray = PoseArray()
 
-        self.modelPts = np.asarray(mesh_model.vertices) * 0.01 #change units
+        self.modelPts = np.asarray(mesh_model.vertices) #* 0.01 #change units
         self.modelPts = self.modelPts[randomIndices, :]
 
         self.xmap = np.array([[j for i in range(640)] for j in range(480)])
@@ -300,17 +300,17 @@ class DenseFusion:
             # print((cmax, cmin), (rmax, rmin))
 
             ''' introduce offset in Rot '''
-            Rx = rotation_matrix(2*m.pi/3, [1, 0, 0], my_t)
-            Ry = rotation_matrix(10*m.pi/180, [0, 1, 0], my_t)
-            Rz = rotation_matrix(5*m.pi/180, [0, 0, 1], my_t)
-            offR = concatenate_matrices(Rx, Ry, Rz)[:3,:3]
-            mat_r = np.dot(mat_r.T, offR[:3, :3])
+            # Rx = rotation_matrix(2*m.pi/3, [1, 0, 0], my_t)
+            # Ry = rotation_matrix(10*m.pi/180, [0, 1, 0], my_t)
+            # Rz = rotation_matrix(5*m.pi/180, [0, 0, 1], my_t)
+            # offR = concatenate_matrices(Rx, Ry, Rz)[:3,:3]
+            # mat_r = np.dot(mat_r.T, offR[:3, :3])
 
             ''' transform 3D box and axis with estimated PNP pose and Draw cube'''
             target_df = np.dot(edges, mat_r) + my_t
             new_image = cv2pil(viz)
             g_draw = ImageDraw.Draw(new_image)
-            tvec, rvec, projected_points = draw_cube(target_df, viz, g_draw, (255, 255, 255), cam_mat, bbox[b])
+            tvec, rvec, projected_points = draw_cube(self.modelPts viz, mat_r, my_t, cam_mat)
             viz = pil2cv(new_image)
             print(f"{Fore.RED} PNP Pos{Style.RESET_ALL}", np.asarray(tvec) *0.01)
 

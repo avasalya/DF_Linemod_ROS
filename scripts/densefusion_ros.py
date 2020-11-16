@@ -292,17 +292,17 @@ class DenseFusion:
             my_t = (points.view(bs * num_points, 1, 3) + pred_t)[which_max[0]].view(-1).cpu().data.numpy()
             my_pred = np.append(my_r, my_t)
 
+            ''' DF refiner NOTE: results are better without refiner '''
+            my_t, my_r = self.pose_refiner(1, my_t, my_r, points, emb, idx)
+
             ''' offset (mm) to align with obj-center '''
-            # get mean depth within a box as depth offset
-            # NOTE: remove NAN and Zeros before taking depth mean
+            # # get mean depth within a box as depth offset
+            # # NOTE: remove NAN and Zeros before taking depth mean
             depth = self.depth[rmin : rmax, cmin : cmax].astype(float)
             depZ,_,_,_ = cv2.mean(depth)
             my_t[2] = depZ + 60 #+objHeight*.5
             my_t[0] = my_t[0] + 20
             my_t[1] = my_t[1] - 20
-
-            ''' DF refiner NOTE: results are better without refiner '''
-            # my_t, my_r = self.pose_refiner(2, my_t, my_r, points, emb, idx)
 
             ''' position mm2m '''
             my_t = np.array(my_t*mm2m)
@@ -322,36 +322,16 @@ class DenseFusion:
             cv2.rectangle(viz, (cmax, cmin), (rmax, rmin), (255,0,0))
 
             ''' project the 3D bounding-box to 2D image plane '''
-            min_point = np.min(self.modelPts, axis=0)
-            max_point = np.max(self.modelPts, axis=0)
-            min_max = [[a,b] for a,b in zip(min_point, max_point)]
-            #[[x_min, x_max], [y_min, y_max], [z_min, z_max]]
+            tvec, rvec, projPoints = draw_cube(self.modelPts, viz, mat_r, my_t, cam_mat)
 
-            vertices = itertools.product(*min_max)
-            vertices = np.asarray(list(vertices))
-            cuboid = cv2.projectPoints(vertices, mat_r, my_t, cam_mat, None)[0]
-            cuboid = np.transpose(np.asarray(cuboid), (1,0,2))[0]
-            cuboid = [tuple(map(int, point)) for point in cuboid]
-
-            line_width = 2
-            cv2.line(viz, cuboid[0], cuboid[1], (255,255,255), line_width)
-            cv2.line(viz, cuboid[0], cuboid[2], (255,255,255), line_width)
-            cv2.line(viz, cuboid[0], cuboid[4], (255,255,255), line_width)
-            cv2.line(viz, cuboid[1], cuboid[3], (255,255,255), line_width)
-            cv2.line(viz, cuboid[1], cuboid[5], (255,255,255), line_width)
-            cv2.line(viz, cuboid[2], cuboid[3], (255,255,255), line_width)
-            cv2.line(viz, cuboid[2], cuboid[6], (255,255,255), line_width)
-            cv2.line(viz, cuboid[3], cuboid[7], (255,255,255), line_width)
-            cv2.line(viz, cuboid[4], cuboid[5], (255,255,255), line_width)
-            cv2.line(viz, cuboid[4], cuboid[6], (255,255,255), line_width)
-            cv2.line(viz, cuboid[5], cuboid[7], (255,255,255), line_width)
-            cv2.line(viz, cuboid[6], cuboid[7], (255,255,255), line_width)
+            ''' add PnP to DF's predicted pose'''
+            I = np.identity(4)
+            I[0:3, 0:3] = np.dot(mat_r.T, quaternion_matrix(rvec)[0:3, 0:3]) # mat_r
+            I[0:3, -1] =  my_t + np.asarray(tvec) *mm2m # my_t
+            rot = quaternion_from_matrix(I, True) #wxyz
 
             ''' convert pose to ros-msg '''
-            I = np.identity(4)
-            I[0:3, 0:3] = mat_r
-            I[0:3, -1] = my_t
-            rot = quaternion_from_matrix(I, True) #wxyz
+            my_t = I[0:3, -1]
             my_t = my_t.reshape(1,3)
             pose = {
                     'tx':my_t[0][0],
