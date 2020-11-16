@@ -295,14 +295,14 @@ class DenseFusion:
             ''' offset (mm) to align with obj-center '''
             # get mean depth within a box as depth offset
             # NOTE: remove NAN and Zeros before taking depth mean
-            # depth = self.depth[rmin : rmax, cmin : cmax].astype(float)
+            depth = self.depth[rmin : rmax, cmin : cmax].astype(float)
             depZ,_,_,_ = cv2.mean(depth)
             my_t[2] = depZ + 60 #+objHeight*.5
             my_t[0] = my_t[0] + 20
             my_t[1] = my_t[1] - 20
 
             ''' DF refiner NOTE: results are better without refiner '''
-            my_t, my_r = self.pose_refiner(2, my_t, my_r, points, emb, idx)
+            # my_t, my_r = self.pose_refiner(2, my_t, my_r, points, emb, idx)
 
             ''' position mm2m '''
             my_t = np.array(my_t*mm2m)
