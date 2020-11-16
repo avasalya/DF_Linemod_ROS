@@ -211,10 +211,8 @@ class DenseFusion:
         key = cv2.waitKey(1) & 0xFF
         if key == 27:
             try:
-                print('sys.exit')
                 sys.exit(1)
             except SystemExit:
-                print('os.exit')
                 os._exit(0)
 
         t2 = time.time()
@@ -265,12 +263,10 @@ class DenseFusion:
             choose = np.array([choose])
             choose = torch.LongTensor(choose.astype(np.int32))
 
-            cam_scale = 1 #mm2m
-            pt2 = depth_masked/cam_scale
+            pt2 = depth_masked
             pt0 = (ymap_masked - cam_cx) * pt2 / cam_fx
             pt1 = (xmap_masked - cam_cy) * pt2 / cam_fy
             cloud = np.concatenate((pt0, pt1, pt2), axis=1)
-            # cloud = cloud /1000
             points = torch.from_numpy(cloud.astype(np.float32))
 
             img_masked = img[:, rmin:rmax, cmin:cmax ]
@@ -286,7 +282,6 @@ class DenseFusion:
             pred_c = pred_c.view(bs, num_points)
             how_max, which_max = torch.max(pred_c, 1) #1
             pred_t = pred_t.view(bs * num_points, 1, 3)
-            # print('max confidence', how_max)
 
             my_r = pred_r[0][which_max[0]].view(-1).cpu().data.numpy()
             my_t = (points.view(bs * num_points, 1, 3) + pred_t)[which_max[0]].view(-1).cpu().data.numpy()
@@ -296,9 +291,8 @@ class DenseFusion:
             my_t, my_r = self.pose_refiner(1, my_t, my_r, points, emb, idx)
 
             ''' offset (mm) to align with obj-center '''
-            # get mean depth within a box as depth offset
+            # get mean depth within a bbox as new object depth
             meandepth = self.depth[rmin:rmax, cmin:cmax].astype(float)
-
             # remove NAN and Zeros before taking depth mean
             nonZero = meandepth[np.nonzero(meandepth)]
             nonNaNDepth = np.nanmean(nonZero)
@@ -344,7 +338,7 @@ class DenseFusion:
                     'qy':rot[2],
                     'qz':rot[3]}
 
-            '''publish only if predicted pose is within the respective bounding box'''
+            '''publish only if predicted pose is within the respective bbox'''
             if  (min(cmax,rmax) < center[0] and center[0] < max(cmax,rmax)) and \
                 (min(cmin,rmin) < center[1] and center[1] < max(cmin,rmin)):
                 obj_pose.append(pose)
