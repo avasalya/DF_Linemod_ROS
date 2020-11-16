@@ -245,7 +245,7 @@ class DenseFusion:
             cmax = int(bbox[b,3])
 
             img = np.transpose(rgb_original, (0, 1, 2)) #CxHxW
-            choose = mask[rmin : rmax, cmin : cmax].flatten().nonzero()[0]
+            choose = mask[rmin:rmax, cmin:cmax].flatten().nonzero()[0]
             if len(choose) == 0:
                 cc = torch.LongTensor([0])
                 return(cc, cc, cc, cc, cc, cc)
@@ -273,7 +273,7 @@ class DenseFusion:
             # cloud = cloud /1000
             points = torch.from_numpy(cloud.astype(np.float32))
 
-            img_masked = img[:, rmin : rmax, cmin : cmax ]
+            img_masked = img[:, rmin:rmax, cmin:cmax ]
             img_ = norm(torch.from_numpy(img_masked.astype(np.float32)))
             idx = torch.LongTensor([self.object_index])
             img_ = Variable(img_).cuda().unsqueeze(0)
@@ -298,7 +298,7 @@ class DenseFusion:
             ''' offset (mm) to align with obj-center '''
             # # get mean depth within a box as depth offset
             # # NOTE: remove NAN and Zeros before taking depth mean
-            depth = self.depth[rmin : rmax, cmin : cmax].astype(float)
+            depth = self.depth[rmin:rmax, cmin:cmax].astype(float)
             depZ,_,_,_ = cv2.mean(depth)
             my_t[2] = depZ + 60 #+objHeight*.5
             my_t[0] = my_t[0] + 20
@@ -322,7 +322,7 @@ class DenseFusion:
             cv2.rectangle(viz, (cmax, cmin), (rmax, rmin), (255,0,0))
 
             ''' project the 3D bounding-box to 2D image plane '''
-            tvec, rvec, projPoints = draw_cube(self.modelPts, viz, mat_r, my_t, cam_mat)
+            tvec, rvec, projPoints, center = draw_cube(self.modelPts, viz, mat_r, my_t, cam_mat)
 
             ''' add PnP to DF's predicted pose'''
             I = np.identity(4)
@@ -342,9 +342,11 @@ class DenseFusion:
                     'qy':rot[2],
                     'qz':rot[3]}
 
-            obj_pose.append(pose)
+            '''publish only if predicted pose is within the respective bounding box'''
+            if  (min(cmax,rmax) < center[0] and center[0] < max(cmax,rmax)) and \
+                (min(cmin,rmin) < center[1] and center[1] < max(cmin,rmin)):
+                obj_pose.append(pose)
             self.viz = viz
-
         else:
             if len(bbox) < 1:
                 print(f'{Fore.RED}unable to detect pose..{Style.RESET_ALL}')

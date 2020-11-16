@@ -9,6 +9,16 @@ def cay(R):
     I = np.identity(4)
     return (np.linalg.inv((I - R)) * (I - R))
 
+def pil2cv(image):
+    new_image = np.array(image, dtype=np.uint8)
+    new_image = cv2.cvtColor(new_image, cv2.COLOR_BGR2RGB)
+    return new_image
+
+def cv2pil(image):
+    new_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    new_image = pImage.fromarray(new_image)
+    return new_image
+
 def makeRortho(R):
     ''' https://math.stackexchange.com/questions/3292034/normalizing-a-rotation-matrix '''
     return (cay(skew(cay(R))))
@@ -16,7 +26,7 @@ def makeRortho(R):
 def draw_axis(img, R, t, K):
     # How+to+draw+3D+Coordinate+Axes+with+OpenCV+for+face+pose+estimation%3f
     rotV, _ = cv2.Rodrigues(R)
-    points = np.float32([[.05, 0, 0], [0, .05, 0], [0, 0, .05], [0, 0, 0]]).reshape(-1, 3)
+    points = np.float32([[1, 0, 0], [0, 1, 0], [0, 0, 1], [0, 0, 0]]).reshape(-1, 3)
     axisPoints, _ = cv2.projectPoints(points, rotV, t, K, (0, 0, 0, 0))
     img = cv2.line(img, tuple(axisPoints[3].ravel()), tuple(axisPoints[0].ravel()), (255,0,0), 3)
     img = cv2.line(img, tuple(axisPoints[3].ravel()), tuple(axisPoints[1].ravel()), (0,255,0), 3)
@@ -35,16 +45,6 @@ def draw_pointCloudList(img, imgpts, color):
         for point in imgpts[c]:
             img = cv2.circle(img,(int(point[0][0]),int(point[0][1])), 1, color, -1)
     return img
-
-def pil2cv(image):
-    new_image = np.array(image, dtype=np.uint8)
-    new_image = cv2.cvtColor(new_image, cv2.COLOR_BGR2RGB)
-    return new_image
-
-def cv2pil(image):
-    new_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-    new_image = pImage.fromarray(new_image)
-    return new_image
 
 def draw_cube(modelPts, viz, rvec, tvec, cam_mat):
 
@@ -73,14 +73,21 @@ def draw_cube(modelPts, viz, rvec, tvec, cam_mat):
     cv2.line(viz, cuboid[5], cuboid[7], (255,255,255), line_width)
     cv2.line(viz, cuboid[6], cuboid[7], (255,255,255), line_width)
 
-    ''' PnP for refinement '''
+    cuboidCenter = (min_point + max_point)/2
+    cuboidCenter = cv2.projectPoints(cuboidCenter, rvec, tvec, cam_mat, None)[0]
+    cuboidCenter = np.transpose(np.asarray(cuboidCenter), (1,0,2))[0]
+    for center in cuboidCenter:
+        cv2.circle(viz, tuple(map(int, center)), 5, (0, 0, 0), -1)
+
+    ''' PnP for refinement, adapted from DOPE '''
     pnpSolver = CuboidPNPSolver('txonigiri',
                                 camera_intrinsic_matrix = cam_mat,
                                 cuboid3d=Cuboid3d(size3d = [2., 2., 2.]))
     tvec, rvec, projPoints = pnpSolver.solve_pnp(cuboid)
     # rvec, tvec = cv2.solvePnPRefineVVS(modelPts, cloudPts, cam_mat, dist, rot_, my_t)
+    draw_axis(viz, quaternion_matrix(rvec)[0:3, 0:3], np.array(tvec), cam_mat)
 
-    return tvec, rvec, projPoints
+    return tvec, rvec, projPoints, center
 
 def Publisher(model_pub, pose_pub, cam_mat, viz, objs_pose, modelPts, cloudPts, frame, method):
 
@@ -154,10 +161,6 @@ def Publisher(model_pub, pose_pub, cam_mat, viz, objs_pose, modelPts, cloudPts, 
             pose2msg.orientation.z = poses[p]['qz']
             pose_array.poses.append(pose2msg)
             print(f'{Fore.RED} poseArray{Style.RESET_ALL}', pose_array.poses[p])
-
-            pos = np.array([poses[p]['tx'], poses[p]['ty'], poses[p]['tz']])
-            q2rot = quaternion_matrix([poses[p]['qw'], poses[p]['qx'], poses[p]['qy'], poses[p]['qz']])
-            draw_axis(viz, q2rot[0:3, 0:3], pos, cam_mat)
 
         pose_pub.publish(pose_array)
 
