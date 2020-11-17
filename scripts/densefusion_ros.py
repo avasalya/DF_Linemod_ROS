@@ -48,7 +48,7 @@ refiner.load_state_dict(torch.load(path + '/../txonigiri/pose_refine_modelv2.pth
 refiner.eval()
 print('pose refine model loaded...')
 
-filepath = (path + '/../txonigiri/txonigiriv2.ply')
+filepath = (path + '/../txonigiri/txonigiri.ply')
 mesh_model = o3d.io.read_triangle_mesh(filepath)
 randomIndices = rand.sample(range(0, 9958), num_points)
 print('object mesh model loaded...')
