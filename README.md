@@ -1,13 +1,14 @@
 # DF_Linemod_ROS
-**densefusion with ros using linemod format on custom dataset with chainer mask-rcnn for segmentation**
-* tested on Ubuntu 18.04, ROS Melodic, RTX 2080-Ti, CUDA 10.1/10.2, Python3.6.9, PyTorch 1.5.1
+**densefusion with ros using linemod format on custom dataset with chainer mask-rcnn or yolact for segmentation**
+* tested on Ubuntu 18.04, ROS Melodic, RTX 2080-Ti, CUDA 10.1/10.2, Python3.6.9,3.7 PyTorch 1.4.1, 1.5.1
 * refer `environment.yml` for other anaconda packages
 * git clone in your catkin_ws https://github.com/avasalya/DF_Linemod_ROS.git
 
 ## adapted from
 * https://github.com/j96w/DenseFusion
 * https://github.com/hygxy/ma_densefusion
-* https://github.com/wkentaro/chainer-mask-rcnn
+* https://github.com/wkentaro/chainer-mask-rcnn [[maskrcnn branch](https://github.com/avasalya/DF_Linemod_ROS/tree/maskrcnn)]
+* https://github.com/avasalya/YolactROS [[yolact branch](https://github.com/avasalya/DF_Linemod_ROS/tree/yolact)]
 
 ## create conda environment
 * `conda env create -f environment.yml`
@@ -42,7 +43,7 @@
 
 <br />
 
-# publish pose/rgbd-pointCloud on ROS with `pyrealsense2` pkg
+# publish pose/rgbd-pointCloud on ROS with `pyrealsense2` pkg [not updated]
 * `roscore`
 * `python3 scripts/densefusion_cam.py`
 *  launch rviz `roslaunch densefusion_ros densefusion_cam.launch`
@@ -63,5 +64,6 @@
 * `Mask-rcnn is slow`, takes more than 0.5 seconds to process single frame, causes DF freezing with `densefusion_ros.py`. If this happens,
     * simply, restart the node again.
     * another solution, put a condition and receive new RGBD frame only when mask-rcnn has finished processing previous frame. --> this will increase overall inference time.
+    * use `yolact` for segmentation, switch to [[yolact branch](https://github.com/avasalya/DF_Linemod_ROS/tree/yolact)]
 * if `no onigiri detected` msg appears, that would mean depth camera is unable to distinguish between object and background, in such case, change your object location.
 * if using `densefusion_cam.py`, RGBD pointCloud won't update properly, due to probable RVIZ pointCloud memory leaking bug. Rely on 2D image output.
