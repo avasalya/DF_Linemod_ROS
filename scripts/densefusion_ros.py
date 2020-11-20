@@ -90,8 +90,8 @@ class DenseFusion:
         self.pose_pub = rospy.Publisher('/onigiriPose', PoseArray, queue_size = 3)
         self.pose_sub = rospy.Subscriber('/onigiriPose', PoseArray, self.poseCallback, queue_size = 3)
 
-        # self.ts = message_filters.ApproximateTimeSynchronizer([rgb_sub, depth_sub], 9, 1)
-        self.ts = message_filters.TimeSynchronizer([rgb_sub, depth_sub], 9)
+        self.ts = message_filters.ApproximateTimeSynchronizer([rgb_sub, depth_sub], 10, 1)
+        # self.ts = message_filters.TimeSynchronizer([rgb_sub, depth_sub], 9)
         self.ts.registerCallback(self.callback)
 
         # self.cv_image = np.zeros((480, 640, 3), np.uint8)
