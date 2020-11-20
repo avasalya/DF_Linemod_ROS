@@ -52,10 +52,8 @@ print('object mesh model loaded...')
 
 bs = 1
 objId = 0
-objlist =[1]
 mm2m = 0.001
 class_names = ['txonigiri']
-
 color_cache = defaultdict(lambda: {})
 
 # cam @ aist
@@ -72,12 +70,11 @@ class DenseFusion:
         ''' publisher / subscriber '''
         rgb_sub = message_filters.Subscriber('/camera/color/image_raw', Image)
         depth_sub = message_filters.Subscriber('/camera/depth/image_rect_raw', Image)
-        self.model_pub = rospy.Publisher('/onigiriCloud', PointCloud2, queue_size = 3)
-        self.pose_pub = rospy.Publisher('/onigiriPose', PoseArray, queue_size = 3)
-        self.pose_sub = rospy.Subscriber('/onigiriPose', PoseArray, self.poseCallback, queue_size = 3)
+        self.model_pub = rospy.Publisher('/onigiriCloud', PointCloud2, queue_size = 30)
+        self.pose_pub = rospy.Publisher('/onigiriPose', PoseArray, queue_size = 30)
 
-        self.ts = message_filters.ApproximateTimeSynchronizer([rgb_sub, depth_sub], 9, 1)
-        # self.ts = message_filters.TimeSynchronizer([rgb_sub, depth_sub], 100)
+        self.ts = message_filters.ApproximateTimeSynchronizer([rgb_sub, depth_sub], 10, 1)
+        # self.ts = message_filters.TimeSynchronizer([rgb_sub, depth_sub], 10)
         self.ts.registerCallback(self.callback)
 
         self.viz = np.zeros((480, 640, 3), np.uint8)
@@ -108,6 +105,8 @@ class DenseFusion:
         self.display_text = True
         self.display_fps = False
 
+        self.readyToSegmentAgain = True
+
     def poseCallback(self, poseArray):
         self.poseArray = poseArray
 
@@ -115,12 +114,11 @@ class DenseFusion:
 
         depth = np.frombuffer(depth.data, dtype=np.uint16).reshape(depth.height, depth.width, -1)
         rgb = np.frombuffer(rgb.data, dtype=np.uint8).reshape(rgb.height, rgb.width, -1)
-        self.img = rgb
 
-        # visualize depth
-        convertDepth = depth.copy()
-        convertDepth = cv2.normalize(convertDepth, None, alpha = 0, beta = 1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F)
-        cv2.imshow("depth ros2numpy", convertDepth), cv2.waitKey(1)
+        ## visualize depth
+        # convertDepth = depth.copy()
+        # convertDepth = cv2.normalize(convertDepth, None, alpha = 0, beta = 1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F)
+        # cv2.imshow("depth ros2numpy", convertDepth), cv2.waitKey(1)
 
         try:
             ''' estimate pose '''
@@ -134,9 +132,10 @@ class DenseFusion:
         except rospy.ROSException:
             print(f'{Fore.RED}ROS Interrupted')
 
-    def yolactMask(self):
+    def yolactMask(self, rgb):
+
         with torch.no_grad():
-            frame = torch.from_numpy(self.img).cuda().float()
+            frame = torch.from_numpy(rgb).cuda().float()
             batch = FastBaseTransform()(frame.unsqueeze(0))
             preds = self.yolact(batch)
 
@@ -314,37 +313,55 @@ class DenseFusion:
         t1 = time.time()
 
         """ yolact """
-        mask, bbox, viz = self.yolactMask()
-        t2 = time.time()
-        print(f'{Fore.YELLOW}mask-rcnn inference time is:{Style.RESET_ALL}', t2 - t1)
+        if self.readyToSegmentAgain:
+            self.readyToSegmentAgain = False
+            mask, bbox, viz = self.yolactMask(rgb)
+            t2 = time.time()
+            print(f'{Fore.YELLOW}mask-rcnn inference time is:{Style.RESET_ALL}', t2 - t1)
 
         obj_pose = []
-        print(f'{Fore.GREEN}estimating pose..{Style.RESET_ALL}')
+        # print(f'{Fore.GREEN}estimating pose..{Style.RESET_ALL}')
 
         if len(bbox) > 0:
+            # print('total bbox', len(bbox))
             pred = mask.cpu().numpy()
-            pred = pred *255
+            pred = pred #*255
             pred = np.transpose(pred, (1, 2, 0)) # (CxHxW)->(HxWxC)
 
-            # convert img into tensor
+            # rgb = cv2.cvtColor(rgb, cv2.COLOR_BGR2RGB)
+            # cv2.imshow('rgb_original', rgb), cv2.waitKey(1)
+
             rgb_original = np.transpose(rgb, (2, 0, 1))
             norm = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
 
             self.depth = depth.reshape(480, 640)
             mask_depth = ma.getmaskarray(ma.masked_not_equal(self.depth, 0))
-            mask_label = ma.getmaskarray(ma.masked_equal(pred, np.array(255)))
+            # mask_label = ma.getmaskarray(ma.masked_equal(pred, np.array(255)))
+            mask_label = ma.getmaskarray(ma.masked_equal(pred, np.array([0])))
+
+            # print('mask_label', mask_depth.shape)
+            # cv2.imshow('mask', np.uint8(mask_depth)), cv2.waitKey(1)
 
             # iterate through detected masks
+            print('total bbox', len(bbox))
             for b in range(len(bbox)):
 
+                print('b', b)
                 mask = mask_depth * mask_label[:,:,b]
+
+                # convertDepth = cv2.normalize(np.uint8(mask), None, alpha = 0, beta = 1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F)
+                # cv2.imshow('mask', convertDepth), cv2.waitKey(1)
+
                 rmin = int(bbox[b,0])
                 rmax = int(bbox[b,1])
                 cmin = int(bbox[b,2])
                 cmax = int(bbox[b,3])
+                # print(rmin, rmax, cmin, cmax)
 
-                img = np.transpose(rgb_original, (0, 1, 2)) #CxHxW
+                # cv2.imshow('rgb_original', cv2.cvtColor(rgb, cv2.COLOR_BGR2RGB)), cv2.waitKey(1)
+
                 choose = mask[rmin:rmax, cmin:cmax].flatten().nonzero()[0]
+
                 if len(choose) == 0:
                     cc = torch.LongTensor([0])
                     return(cc, cc, cc, cc, cc, cc)
@@ -361,6 +378,9 @@ class DenseFusion:
                 xmap_masked = self.xmap[rmin:rmax, cmin:cmax].flatten()[choose][:, np.newaxis].astype(np.float32)
                 ymap_masked = self.ymap[rmin:rmax, cmin:cmax].flatten()[choose][:, np.newaxis].astype(np.float32)
 
+                # convertDepth = cv2.normalize(np.uint8(depth_masked), None, alpha = 0, beta = 1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F)
+                # cv2.imshow('depth masked', convertDepth), cv2.waitKey(1)
+
                 choose = np.array([choose])
                 choose = torch.LongTensor(choose.astype(np.int32))
 
@@ -370,6 +390,8 @@ class DenseFusion:
                 cloud = np.concatenate((pt0, pt1, pt2), axis=1)
                 points = torch.from_numpy(cloud.astype(np.float32))
 
+                # convert img into tensor
+                img = np.transpose(rgb_original, (0, 1, 2)) #CxHxW
                 img_masked = img[:, rmin:rmax, cmin:cmax ]
                 img_ = norm(torch.from_numpy(img_masked.astype(np.float32)))
                 idx = torch.LongTensor([self.object_index])
@@ -383,6 +405,7 @@ class DenseFusion:
                 pred_c = pred_c.view(bs, num_points)
                 how_max, which_max = torch.max(pred_c, 1) #1
                 pred_t = pred_t.view(bs * num_points, 1, 3)
+                # print('how_max', 'which_max', how_max, which_max)
 
                 my_r = pred_r[0][which_max[0]].view(-1).cpu().data.numpy()
                 my_t = (points.view(bs * num_points, 1, 3) + pred_t)[which_max[0]].view(-1).cpu().data.numpy()
@@ -394,6 +417,7 @@ class DenseFusion:
                 ''' offset (mm) to align with obj-center '''
                 # get mean depth within a bbox as new object depth
                 meandepth = self.depth[rmin:rmax, cmin:cmax].astype(float)
+
                 # remove NAN and Zeros before taking depth mean
                 nonZero = meandepth[np.nonzero(meandepth)]
                 nonNaNDepth = np.nanmean(nonZero)
@@ -416,16 +440,20 @@ class DenseFusion:
                 self.cloudPts = imgpts_cloud.reshape(num_points, 2)
 
                 ''' draw cmr 2D box '''
-                cv2.rectangle(viz, (cmax, cmin), (rmax, rmin), (255,0,0))
+                cv2.rectangle(viz, (cmax, cmin), (rmax, rmin), (255,0,255), 2)
 
                 ''' project the 3D bounding-box to 2D image plane '''
                 tvec, rvec, projPoints, center = draw_cube(self.modelPts, viz, mat_r, my_t, cam_mat)
+                # print('center', center)
 
                 ''' add PnP to DF's predicted pose'''
                 I = np.identity(4)
                 I[0:3, 0:3] = np.dot(mat_r.T, quaternion_matrix(rvec)[0:3, 0:3]) # mat_r
                 I[0:3, -1] =  my_t + np.asarray(tvec) *mm2m # my_t
                 rot = quaternion_from_matrix(I, True) #wxyz
+
+                t3 = time.time()
+                print(f'{Fore.YELLOW}DenseFusion inference time is:{Style.RESET_ALL}', t3 - t2)
 
                 ''' convert pose to ros-msg '''
                 my_t = I[0:3, -1]
@@ -440,20 +468,21 @@ class DenseFusion:
                         'qz':rot[3]}
 
                 '''publish only if predicted pose is within the respective bbox'''
-                if  (min(cmax,rmax) < center[0] and center[0] < max(cmax,rmax)) and \
-                    (min(cmin,rmin) < center[1] and center[1] < max(cmin,rmin)):
-                    obj_pose.append(pose)
+                # if  (min(cmax,rmax) < center[0] and center[0] < max(cmax,rmax)) and \
+                #     (min(cmin,rmin) < center[1] and center[1] < max(cmin,rmin)):
+                obj_pose.append(pose)
+                print('total obj pose', len(obj_pose))
                 self.viz = viz
+
+                if  b == len(bbox):
+                    self.readyToSegmentAgain = True
             else:
                 if len(bbox) < 1:
                     print(f'{Fore.RED}unable to detect pose..{Style.RESET_ALL}')
 
             self.objs_pose = obj_pose
-
-            t3 = time.time()
-            print(f'{Fore.YELLOW}DenseFusion inference time is:{Style.RESET_ALL}', t3 - t2)
         else:
-            print(f'{Fore.RED}no mask or onigiri detected? {Style.RESET_ALL}', pred.shape)
+            print(f'{Fore.RED}no mask or onigiri detected? {Style.RESET_ALL}')
 
 
 def main():
@@ -466,7 +495,7 @@ def main():
 
     try:
         rospy.spin()
-        rate = rospy.Rate(50)
+        rate = rospy.Rate(30)
         while not rospy.is_shutdown():
             rate.sleep()
     except KeyboardInterrupt:

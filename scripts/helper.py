@@ -1,4 +1,5 @@
 from __init__ import *
+
 global t1
 t1 = time.time()
 
@@ -164,13 +165,15 @@ def Publisher(model_pub, pose_pub, cam_mat, viz, objs_pose, modelPts, cloudPts, 
 
         pose_pub.publish(pose_array)
 
-        cv2.imshow('pose', cv2.cvtColor(viz, cv2.COLOR_BGR2RGB))
-        key = cv2.waitKey(1) & 0xFF # stop script
-        if  key == 27:
-            rospy.loginfo(f'{Fore.RED}stopping streaming...{Style.RESET_ALL}')
-            try:
-                sys.exit(1)
-            except SystemExit:
-                os._exit(0)
     else:
         print(f'{Fore.RED}onigiri pose not detected{Style.RESET_ALL}')
+
+    """ visualize pose """
+    cv2.imshow('pose', cv2.cvtColor(viz, cv2.COLOR_BGR2RGB))
+    key = cv2.waitKey(1) & 0xFF # stop script
+    if  key == 27:
+        rospy.loginfo(f'{Fore.RED}stopping streaming...{Style.RESET_ALL}')
+        try:
+            sys.exit(1)
+        except SystemExit:
+            os._exit(0)
