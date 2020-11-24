@@ -73,10 +73,10 @@ class DenseFusion:
         self.model_pub = rospy.Publisher('/onigiriCloud', PointCloud2, queue_size = 30)
         self.pose_pub = rospy.Publisher('/onigiriPose', PoseArray, queue_size = 30)
 
-        self.ts = message_filters.ApproximateTimeSynchronizer([rgb_sub, depth_sub],
-                                                            queue_size=1, slop=.1)
-        # self.ts = message_filters.TimeSynchronizer([rgb_sub, depth_sub], 10)
-        self.ts.registerCallback(self.callback)
+        # ts = message_filters.TimeSynchronizer([rgb_sub, depth_sub], 1)
+        ts = message_filters.ApproximateTimeSynchronizer([rgb_sub, depth_sub], queue_size=1, slop=.1)
+        ts.registerCallback(self.callback)
+        # rospy.Timer(rospy.Duration(2), ts.registerCallback(self.callback))
 
         self.viz = np.zeros((480, 640, 3), np.uint8)
         self.objs_pose = None
@@ -500,7 +500,8 @@ def main():
         rospy.spin()
         rate = rospy.Rate(1)
         while not rospy.is_shutdown():
-            rate.sleep(1)
+            # d = rospy.Duration(10, 0)
+            rate.sleep(2)
     except KeyboardInterrupt:
         print ('Shutting down densefusion ROS node')
     cv2.destroyAllWindows()
