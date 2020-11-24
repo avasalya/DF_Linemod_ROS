@@ -498,9 +498,9 @@ def main():
 
     try:
         rospy.spin()
-        rate = rospy.Rate(0)
+        rate = rospy.Rate(1)
         while not rospy.is_shutdown():
-            rate.sleep()
+            rate.sleep(1)
     except KeyboardInterrupt:
         print ('Shutting down densefusion ROS node')
     cv2.destroyAllWindows()
