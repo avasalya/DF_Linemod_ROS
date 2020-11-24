@@ -74,7 +74,7 @@ class DenseFusion:
         self.pose_pub = rospy.Publisher('/onigiriPose', PoseArray, queue_size = 30)
 
         self.ts = message_filters.ApproximateTimeSynchronizer([rgb_sub, depth_sub],
-                                                            queue_size=10, slop=.1)
+                                                            queue_size=1, slop=.1)
         # self.ts = message_filters.TimeSynchronizer([rgb_sub, depth_sub], 10)
         self.ts.registerCallback(self.callback)
 
@@ -118,25 +118,23 @@ class DenseFusion:
         # convertDepth = cv2.normalize(convertDepth, None, alpha = 0, beta = 1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F)
         # cv2.imshow("depth ros2numpy", convertDepth), cv2.waitKey(1)
 
-
-        # mask = np.zeros((480, 640, 1), np.uint8)
-        # viz = np.zeros((480, 640, 3), np.uint8)
-        # bbox = []
-
+        # initialize before referencing
+        viz = rgb
         t1 = time.time()
         t2 = t1
         """ yolact """
-        if self.readyToSegmentAgain:
-            self.readyToSegmentAgain = False
-            self.mask, self.bbox, self.viz = self.yolactMask(rgb)
-            t2 = time.time()
-            print(f'{Fore.YELLOW}yolact inference time is:{Style.RESET_ALL}', t2 - t1)
-        else:
-            obj_pose = []
-            try:
+        try:
+            if self.readyToSegmentAgain:
+                self.readyToSegmentAgain = False
+
+
+                self.mask, self.bbox, viz = self.yolactMask(rgb)
+                t2 = time.time()
+                print(f'{Fore.YELLOW}---------------------yolact inference time is:{Style.RESET_ALL}', t2 - t1)
+            else:
                 # print('flag', self.readyToSegmentAgain)
                 ''' estimate pose '''
-                self.pose_estimator(rgb, depth, obj_pose)
+                self.pose_estimator(rgb, depth, viz)
                 t3 = time.time()
                 print(f'{Fore.YELLOW}DenseFusion inference time is:{Style.RESET_ALL}', t3 - t2)
 
@@ -144,8 +142,8 @@ class DenseFusion:
                 Publisher(self.model_pub, self.pose_pub, cam_mat,
                         self.viz, self.objs_pose, self.modelPts, self.cloudPts,
                         'camera_depth_optical_frame', method=None)
-            except rospy.ROSException:
-                print(f'{Fore.RED}ROS Interrupted')
+        except rospy.ROSException:
+            print(f'{Fore.RED}ROS Interrupted')
 
     def yolactMask(self, rgb):
 
@@ -323,7 +321,9 @@ class DenseFusion:
 
         return my_t, my_r
 
-    def pose_estimator(self, rgb, depth, obj_pose):
+    def pose_estimator(self, rgb, depth, viz):
+
+        obj_pose = []
 
         # print('before', len(self.bbox))
         if len(self.bbox) > 0:
@@ -349,10 +349,10 @@ class DenseFusion:
             # cv2.imshow('mask', np.uint8(mask_depth)), cv2.waitKey(1)
 
             # iterate through detected masks
-            # print('total self.bbox', len(self.bbox))
+            print('total objects found', len(self.bbox))
             for b in range(len(self.bbox)):
 
-                print('object', b)
+                print('objects processed', b)
                 mask = mask_depth * mask_label[:,:,b]
 
                 # convertDepth = cv2.normalize(np.uint8(mask), None, alpha = 0, beta = 1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F)
@@ -442,14 +442,14 @@ class DenseFusion:
 
                 ''' project depth point cloud '''
                 imgpts_cloud, jac = cv2.projectPoints(np.dot(points.cpu().numpy(), mat_r), mat_r, my_t, cam_mat, None)
-                self.viz = draw_pointCloud(self.viz, imgpts_cloud, [255, 0, 0]) # cloudPts
+                viz = draw_pointCloud(viz, imgpts_cloud, [255, 0, 0]) # cloudPts
                 self.cloudPts = imgpts_cloud.reshape(num_points, 2)
 
                 ''' draw cmr 2D box '''
-                cv2.rectangle(self.viz, (cmax, cmin), (rmax, rmin), (255,0,255), 2)
+                cv2.rectangle(viz, (cmax, cmin), (rmax, rmin), (255,0,255), 2)
 
                 ''' project the 3D bounding-box to 2D image plane '''
-                tvec, rvec, projPoints, center = draw_cube(self.modelPts, self.viz, mat_r, my_t, cam_mat)
+                tvec, rvec, projPoints, center = draw_cube(self.modelPts, viz, mat_r, my_t, cam_mat)
                 # print('center', center)
 
                 ''' add PnP to DF's predicted pose'''
@@ -475,15 +475,15 @@ class DenseFusion:
                 #     (min(cmin,rmin) < center[1] and center[1] < max(cmin,rmin)):
                 obj_pose.append(pose)
                 print('total obj pose', len(obj_pose))
-                # self.viz = viz
-
-                if  b == len(self.bbox):
-                    self.readyToSegmentAgain = True
-            else:
-                if len(self.bbox) < 1:
-                    print(f'{Fore.RED}unable to detect pose..{Style.RESET_ALL}')
+                self.viz = viz
 
             self.objs_pose = obj_pose
+        if  b == len(self.bbox):
+            self.readyToSegmentAgain = True
+            # else:
+            #     if len(self.bbox) < 1:
+            #         print(f'{Fore.RED}unable to detect pose..{Style.RESET_ALL}')
+
         else:
             # self.readyToSegmentAgain = True
             print(f'{Fore.RED}no mask or onigiri detected? {Style.RESET_ALL}')
