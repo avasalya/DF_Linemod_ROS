@@ -166,7 +166,7 @@ def Publisher(model_pub, pose_pub, cam_mat, viz, objs_pose, modelPts, cloudPts, 
         pose_pub.publish(pose_array)
 
     else:
-        print(f'{Fore.RED}onigiri pose not detected{Style.RESET_ALL}')
+        print(f'{Fore.RED}Publisher: onigiri pose not detected{Style.RESET_ALL}')
 
     """ visualize pose """
     cv2.imshow('pose', cv2.cvtColor(viz, cv2.COLOR_BGR2RGB))
