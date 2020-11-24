@@ -474,15 +474,14 @@ class DenseFusion:
                 # if  (min(cmax,rmax) < center[0] and center[0] < max(cmax,rmax)) and \
                 #     (min(cmin,rmin) < center[1] and center[1] < max(cmin,rmin)):
                 obj_pose.append(pose)
-                print('total obj pose', len(obj_pose))
                 self.viz = viz
 
+            print('total obj processed', len(obj_pose))
             self.objs_pose = obj_pose
+
         if  b == len(self.bbox):
             self.readyToSegmentAgain = True
-            # else:
-            #     if len(self.bbox) < 1:
-            #         print(f'{Fore.RED}unable to detect pose..{Style.RESET_ALL}')
+            print(f'{Fore.RED}processing next segmentation sample{Style.RESET_ALL}')
 
         else:
             # self.readyToSegmentAgain = True
@@ -499,9 +498,9 @@ def main():
 
     try:
         rospy.spin()
-        # rate = rospy.Rate(1)
-        # while not rospy.is_shutdown():
-        #     rate.sleep()
+        rate = rospy.Rate(0)
+        while not rospy.is_shutdown():
+            rate.sleep()
     except KeyboardInterrupt:
         print ('Shutting down densefusion ROS node')
     cv2.destroyAllWindows()
